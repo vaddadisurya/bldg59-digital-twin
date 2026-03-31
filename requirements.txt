@@ -1,0 +1,2 @@
+pandas==2.2.0
+azure-iot-device==3.5.3
