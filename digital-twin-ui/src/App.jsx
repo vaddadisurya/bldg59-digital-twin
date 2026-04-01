@@ -283,15 +283,27 @@ const ComplianceView = ({ data, current }) => {
 // MAIN
 // ============================================================
 export default function App() {
+  // 1. ALL HOOKS MUST BE AT THE TOP
   const [sector, setSector] = useState("hvac");
   const [idx, setIdx] = useState(0);
   const [playing, setPlaying] = useState(true);
   const [speed, setSpeed] = useState(1500);
   const timerRef = useRef(null);
 
-const [dataSource, setDataSource] = useState(BLOB_CONFIG.enabled ? "azure" : "replay");
+  const [dataSource, setDataSource] = useState(BLOB_CONFIG.enabled ? "azure" : "replay");
   const [connStatus, setConnStatus] = useState("Initializing...");
-const [liveData, setLiveData] = useState([])
+  const [liveData, setLiveData] = useState([]);
+  const [rawData, setRawData] = useState([]);
+
+  // 2. FETCH LOCAL JSON (Moved up so it actually runs)
+  useEffect(() => {
+    fetch("telemetry_full.json")
+      .then(r => r.json())
+      .then(data => setRawData(data))
+      .catch(() => console.log("Local JSON failed"));
+  }, []);
+
+  // 3. FETCH AZURE BLOBS
   useEffect(() => {
     if (dataSource !== "azure") {
       setConnStatus("Offline (Replay Mode)");
@@ -301,7 +313,7 @@ const [liveData, setLiveData] = useState([])
     const fetchBlob = async () => {
       setConnStatus("Connecting to Azure...");
       try {
-        const getLatestFromContainer = async (sasUrl, name) => {
+        const getLatestFromContainer = async (sasUrl) => {
           if (!sasUrl) return {};
           const client = new ContainerClient(sasUrl);
           let latestBlob = null;
@@ -325,10 +337,10 @@ const [liveData, setLiveData] = useState([])
         };
 
         const [hvac, pumps, elec, comp] = await Promise.all([
-          getLatestFromContainer(BLOB_CONFIG.hvacUrl, "HVAC"),
-          getLatestFromContainer(BLOB_CONFIG.pumpsUrl, "Pumps"),
-          getLatestFromContainer(BLOB_CONFIG.elecUrl, "Elec"),
-          getLatestFromContainer(BLOB_CONFIG.complianceUrl, "Compliance")
+          getLatestFromContainer(BLOB_CONFIG.hvacUrl),
+          getLatestFromContainer(BLOB_CONFIG.pumpsUrl),
+          getLatestFromContainer(BLOB_CONFIG.elecUrl),
+          getLatestFromContainer(BLOB_CONFIG.complianceUrl)
         ]);
 
         const azureTime = hvac.WindowEndTime || hvac.t || new Date().toISOString();
@@ -339,12 +351,12 @@ const [liveData, setLiveData] = useState([])
 
         setLiveData(prev => {
           const newHistory = [...prev, combined].slice(-CHART_WINDOW);
-          setConnStatus(`Connected: Received update at ${new Date().toLocaleTimeString()}`);
+          setConnStatus(`Connected: Update at ${new Date().toLocaleTimeString()}`);
           return newHistory;
         });
       } catch (e) {
         console.error("Azure Connection Failed:", e);
-        setConnStatus(`Error: ${e.message.slice(0, 40)}... Check CORS/SAS`);
+        setConnStatus(`Error: Check CORS/SAS`);
       }
     };
     
@@ -353,10 +365,10 @@ const [liveData, setLiveData] = useState([])
     return () => clearInterval(interval);
   }, [dataSource]);
 
-  // 3. The Combined Rule
-  const data = dataSource === "azure" && liveData.length > 0 ? liveData : rawData;
+  // 4. THE COMBINED DATA RULE
+  const data = dataSource === "azure" && liveData && liveData.length > 0 ? liveData : rawData;
 
-  // 4. FIX: Moved the auto-play hook ABOVE the early return to stop Error 310!
+  // 5. TIMELINE AUTO-PLAY
   useEffect(() => {
     if (playing && dataSource === "replay" && data && data.length > 0) {
       timerRef.current = setInterval(() => {
@@ -366,7 +378,7 @@ const [liveData, setLiveData] = useState([])
     return () => clearInterval(timerRef.current);
   }, [playing, speed, data, dataSource]);
 
-  // Wait for data to load before rendering the UI
+  // 6. EARLY RETURN (MUST BE BELOW ALL HOOKS)
   if (!data || data.length === 0) {
     return <div style={{ background: C.bg, color: C.text, minHeight: "100vh", padding: 20 }}>Loading Telemetry...</div>;
   }
@@ -388,6 +400,7 @@ const [liveData, setLiveData] = useState([])
 
   return (
     <div style={{ minHeight:"100vh", background:C.bg, color:C.text, fontFamily:sans }}>
+      {/* Header */}
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 20px", borderBottom:`1px solid ${C.border}`, background:C.surface }}>
         <div style={{ display:"flex", alignItems:"center", gap:14 }}>
           <div style={{ width:30, height:30, borderRadius:6, background:`linear-gradient(135deg, ${C.cyan}40, ${C.purple}40)`, border:`1px solid ${C.border}`, display:"flex", alignItems:"center", justifyContent:"center" }}><Activity size={14} color={C.cyan}/></div>
@@ -396,7 +409,8 @@ const [liveData, setLiveData] = useState([])
             <div style={{ fontSize:10, color:C.textDim, fontFamily:mono }}>BLDG59-LBNL-BERKELEY</div>
           </div>
         </div>
-<div style={{ display:"flex", alignItems:"center", gap:16 }}>
+
+        <div style={{ display:"flex", alignItems:"center", gap:16 }}>
           <button 
             onClick={() => setDataSource(prev => prev === "replay" ? "azure" : "replay")}
             style={{ padding: "6px 12px", borderRadius: 4, fontSize: 11, fontWeight:600, fontFamily: mono, background: dataSource === "azure" ? `${C.green}20` : C.surfaceAlt, border: `1px solid ${dataSource === "azure" ? C.green : C.border}`, color: dataSource === "azure" ? C.green : C.textMuted, cursor: "pointer" }}
@@ -404,7 +418,6 @@ const [liveData, setLiveData] = useState([])
             {dataSource === "azure" ? "🟢 LIVE — Azure Blob" : "⚪ REPLAY — Local Data"}
           </button>
           
-          {/* Hide playback buttons if in Azure mode */}
           {dataSource === "replay" && (
             <div style={{ display:"flex", alignItems:"center", gap:6, padding:"4px 10px", background:C.surfaceAlt, borderRadius:6, border:`1px solid ${C.border}` }}>
               <button onClick={() => setPlaying(!playing)} style={{ background:"none", border:"none", cursor:"pointer", color:C.text, display:"flex", padding:2 }}>
@@ -419,7 +432,7 @@ const [liveData, setLiveData] = useState([])
             </div>
           )}
 
-{/* Status Indicator */}
+          {/* Status Indicator */}
           <div style={{ display:"flex", alignItems:"center", gap:10, padding:"4px 12px", background:C.surfaceAlt, borderRadius:6, border:`1px solid ${C.border}` }}>
             <div style={{ display:"flex", alignItems:"center", gap:6 }}>
               <span style={{ 
@@ -431,8 +444,7 @@ const [liveData, setLiveData] = useState([])
                 {connStatus}
               </span>
             </div>
-          
-  </div>
+          </div>
           
           {dataSource === "replay" && (
             <div style={{ fontSize:11, fontFamily:mono, color:C.textMuted, padding:"4px 8px", background:C.surfaceAlt, borderRadius:4 }}>
@@ -441,6 +453,8 @@ const [liveData, setLiveData] = useState([])
           )}
         </div>
       </div>
+
+      {/* Tabs */}
       <div style={{ display:"flex", gap:4, padding:"8px 20px", borderBottom:`1px solid ${C.border}` }}>
         {tabs.map(tab => {
           const Icon = tab.icon;
@@ -450,12 +464,15 @@ const [liveData, setLiveData] = useState([])
           </button>;
         })}
       </div>
+
+      {/* Content */}
       <div style={{ padding:20 }}>
         {sector === "hvac" && <HVACView data={history} current={current}/>}
         {sector === "pumps" && <PumpsView data={history} current={current}/>}
         {sector === "energy" && <EnergyView data={history} current={current}/>}
         {sector === "compliance" && <ComplianceView data={history} current={current}/>}
       </div>
+
       <div style={{ padding:"8px 20px", borderTop:`1px solid ${C.border}`, display:"flex", justifyContent:"space-between" }}>
         <span style={{ fontSize:9, color:C.textDim, fontFamily:mono }}>Data: LBNL Building 59 Operational Dataset (Luo et al., 2022, Nature Scientific Data) — Enriched with physics-informed synthetic degradation</span>
         <span style={{ fontSize:9, color:C.textDim, fontFamily:mono }}>v2.0 — Dynamic Replay Mode</span>
