@@ -235,7 +235,7 @@ const EnergyView = ({ data, current }) => {
 
 const ComplianceView = ({ data, current }) => {
   const c = current || {};
-  // FIXED: Added fallback values so the app never crashes if Azure data is missing a field!
+  // ADD FALLBACKS TO PREVENT CRASHING
   const hwc = c.hwc || 0;
   const cg = c.cg || 0;
   const vib = c.vib || 0;
