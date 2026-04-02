@@ -1,54 +1,1269 @@
-import { useState, useEffect, useRef } from "react";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area, BarChart, Bar, ReferenceLine, CartesianGrid } from "recharts";
-import { Activity, Zap, Droplets, ThermometerSun, AlertTriangle, CheckCircle, XCircle, Clock, Shield, Gauge, Wind, Play, Pause, SkipForward } from "lucide-react";
+// Developed by: Suryaprakasarao Vaddadi
+// Project: Building 59 Asset Command Center
+// Date: April 2026
 
-const n = (v, fb = 0) => { const x = Number(v); return isNaN(x) ? fb : x; };
-const VIB_WARN = 4.5, VIB_FAIL = 8.0, LEG_LIMIT = 60, COMFORT_BAND = 2.0, CHART_WINDOW = 48;
+import { useState, useEffect, useRef } from "react";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  ReferenceLine,
+  CartesianGrid,
+} from "recharts";
+import {
+  Activity,
+  Zap,
+  Droplets,
+  ThermometerSun,
+  AlertTriangle,
+  CheckCircle,
+  XCircle,
+  Clock,
+  Shield,
+  Gauge,
+  Wind,
+  Play,
+  Pause,
+  SkipForward,
+} from "lucide-react";
+
+const n = (v, fb = 0) => {
+  const x = Number(v);
+  return isNaN(x) ? fb : x;
+};
+const VIB_WARN = 4.5,
+  VIB_FAIL = 8.0,
+  LEG_LIMIT = 60,
+  COMFORT_BAND = 2.0,
+  CHART_WINDOW = 48;
 const SPEED_OPTIONS = [500, 1000, 2000, 4000];
-const BLOB_CONFIG = { enabled: true, hvacUrl: import.meta.env.VITE_AZURE_HVAC_SAS || "", pumpsUrl: import.meta.env.VITE_AZURE_PUMPS_SAS || "", elecUrl: import.meta.env.VITE_AZURE_ELEC_SAS || "", complianceUrl: import.meta.env.VITE_AZURE_COMPLIANCE_SAS || "", pollIntervalMs: 30000 };
-const C = { bg:"#09090b", surface:"#18181b", surfaceAlt:"#1c1c1f", border:"#27272a", text:"#fafafa", textMuted:"#a1a1aa", textDim:"#71717a", cyan:"#22d3ee", amber:"#fbbf24", red:"#f87171", green:"#4ade80", purple:"#a78bfa", blue:"#60a5fa" };
+const BLOB_CONFIG = {
+  enabled: true,
+  hvacUrl: import.meta.env.VITE_AZURE_HVAC_SAS || "",
+  pumpsUrl: import.meta.env.VITE_AZURE_PUMPS_SAS || "",
+  elecUrl: import.meta.env.VITE_AZURE_ELEC_SAS || "",
+  complianceUrl: import.meta.env.VITE_AZURE_COMPLIANCE_SAS || "",
+  pollIntervalMs: 30000,
+};
+const C = {
+  bg: "#09090b",
+  surface: "#18181b",
+  surfaceAlt: "#1c1c1f",
+  border: "#27272a",
+  text: "#fafafa",
+  textMuted: "#a1a1aa",
+  textDim: "#71717a",
+  cyan: "#22d3ee",
+  amber: "#fbbf24",
+  red: "#f87171",
+  green: "#4ade80",
+  purple: "#a78bfa",
+  blue: "#60a5fa",
+};
 const mono = "'SF Mono','Fira Code','Cascadia Code',Consolas,monospace";
 const sans = "-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif";
 
-const Badge = ({status}) => { const m = {online:[C.green,"ONLINE"],warning:[C.amber,"WARNING"],critical:[C.red,"CRITICAL"],offline:[C.textDim,"OFFLINE"],compliant:[C.green,"PASS"],breach:[C.red,"BREACH"]}; const [color,label] = m[status]||[C.textDim,String(status).toUpperCase()]; return <span style={{display:"inline-flex",alignItems:"center",gap:5,padding:"4px 12px",background:`${color}15`,border:`1px solid ${color}35`,borderRadius:4,fontSize:11,fontWeight:700,color,letterSpacing:0.8,fontFamily:mono}}><span style={{width:6,height:6,borderRadius:"50%",background:color}}/>{label}</span>; };
+const Badge = ({ status }) => {
+  const m = {
+    online: [C.green, "ONLINE"],
+    warning: [C.amber, "WARNING"],
+    critical: [C.red, "CRITICAL"],
+    offline: [C.textDim, "OFFLINE"],
+    compliant: [C.green, "PASS"],
+    breach: [C.red, "BREACH"],
+  };
+  const [color, label] = m[status] || [C.textDim, String(status).toUpperCase()];
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 5,
+        padding: "4px 12px",
+        background: `${color}15`,
+        border: `1px solid ${color}35`,
+        borderRadius: 4,
+        fontSize: 11,
+        fontWeight: 700,
+        color,
+        letterSpacing: 0.8,
+        fontFamily: mono,
+      }}
+    >
+      <span
+        style={{ width: 6, height: 6, borderRadius: "50%", background: color }}
+      />
+      {label}
+    </span>
+  );
+};
 
-const Metric = ({label,value,unit,sub,icon:Icon}) => (<div style={{padding:"18px 20px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:10}}><div style={{display:"flex",alignItems:"center",gap:7,marginBottom:10}}>{Icon&&<Icon size={15} color={C.textDim}/>}<span style={{fontSize:12,fontWeight:600,color:C.textMuted,fontFamily:mono,letterSpacing:0.8,textTransform:"uppercase"}}>{label}</span></div><div style={{display:"flex",alignItems:"baseline",gap:4}}><span style={{fontSize:28,fontWeight:700,color:C.text,fontFamily:mono,letterSpacing:-1}}>{value}</span>{unit&&<span style={{fontSize:14,color:C.textMuted,fontWeight:500}}>{unit}</span>}</div>{sub&&<div style={{fontSize:12,color:C.textDim,marginTop:5}}>{sub}</div>}</div>);
+const Metric = ({ label, value, unit, sub, icon: Icon }) => (
+  <div
+    style={{
+      padding: "18px 20px",
+      background: C.surface,
+      border: `1px solid ${C.border}`,
+      borderRadius: 10,
+    }}
+  >
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 7,
+        marginBottom: 10,
+      }}
+    >
+      {Icon && <Icon size={15} color={C.textDim} />}
+      <span
+        style={{
+          fontSize: 12,
+          fontWeight: 600,
+          color: C.textMuted,
+          fontFamily: mono,
+          letterSpacing: 0.8,
+          textTransform: "uppercase",
+        }}
+      >
+        {label}
+      </span>
+    </div>
+    <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+      <span
+        style={{
+          fontSize: 28,
+          fontWeight: 700,
+          color: C.text,
+          fontFamily: mono,
+          letterSpacing: -1,
+        }}
+      >
+        {value}
+      </span>
+      {unit && (
+        <span style={{ fontSize: 14, color: C.textMuted, fontWeight: 500 }}>
+          {unit}
+        </span>
+      )}
+    </div>
+    {sub && (
+      <div style={{ fontSize: 12, color: C.textDim, marginTop: 5 }}>{sub}</div>
+    )}
+  </div>
+);
 
-const TT = ({active,payload,label}) => { if(!active||!payload?.length) return null; return <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:6,padding:"10px 14px",fontSize:12,fontFamily:mono}}><div style={{color:C.textMuted,marginBottom:6}}>{label}</div>{payload.map((p,i)=><div key={i} style={{color:C.text}}>{p.name}: <span style={{color:p.color,fontWeight:600}}>{typeof p.value==="number"?p.value.toFixed(1):p.value}</span></div>)}</div>; };
+const TT = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div
+      style={{
+        background: C.surface,
+        border: `1px solid ${C.border}`,
+        borderRadius: 6,
+        padding: "10px 14px",
+        fontSize: 12,
+        fontFamily: mono,
+      }}
+    >
+      <div style={{ color: C.textMuted, marginBottom: 6 }}>{label}</div>
+      {payload.map((p, i) => (
+        <div key={i} style={{ color: C.text }}>
+          {p.name}:{" "}
+          <span style={{ color: p.color, fontWeight: 600 }}>
+            {typeof p.value === "number" ? p.value.toFixed(1) : p.value}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+};
 
-const ChartBox = ({title,children,h=200}) => (<div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"16px 18px"}}><div style={{fontSize:14,fontWeight:600,color:C.textMuted,marginBottom:12,fontFamily:mono,letterSpacing:0.3}}>{title}</div><ResponsiveContainer width="100%" height={h}>{children}</ResponsiveContainer></div>);
+const ChartBox = ({ title, children, h = 200 }) => (
+  <div
+    style={{
+      background: C.surface,
+      border: `1px solid ${C.border}`,
+      borderRadius: 10,
+      padding: "16px 18px",
+    }}
+  >
+    <div
+      style={{
+        fontSize: 14,
+        fontWeight: 600,
+        color: C.textMuted,
+        marginBottom: 12,
+        fontFamily: mono,
+        letterSpacing: 0.3,
+      }}
+    >
+      {title}
+    </div>
+    <ResponsiveContainer width="100%" height={h}>
+      {children}
+    </ResponsiveContainer>
+  </div>
+);
 
-const RTU_MAP = {"001":{name:"RTU-1 (North Wing)",zoneKey:"cg036",zones:"36-42, 64-70",floor:"Floor_G & Floor_S"},"002":{name:"RTU-2 (North Wing)",zoneKey:"cg019",zones:"19, 27-35, 43, 49, 57-63",floor:"Floor_G & Floor_S"},"003":{name:"RTU-3 (South Wing)",zoneKey:"cg018",zones:"18, 25-26, 45, 48, 55-56, 61",floor:"Floor_G & Floor_S"},"004":{name:"RTU-4 (South Wing)",zoneKey:"cg016",zones:"16-17, 21-24, 46-47, 51-54",floor:"Floor_G & Floor_S"}};
+const RTU_MAP = {
+  "001": {
+    name: "RTU-1 (North Wing)",
+    zoneKey: "cg036",
+    zones: "36-42, 64-70",
+    floor: "Floor_G & Floor_S",
+  },
+  "002": {
+    name: "RTU-2 (North Wing)",
+    zoneKey: "cg019",
+    zones: "19, 27-35, 43, 49, 57-63",
+    floor: "Floor_G & Floor_S",
+  },
+  "003": {
+    name: "RTU-3 (South Wing)",
+    zoneKey: "cg018",
+    zones: "18, 25-26, 45, 48, 55-56, 61",
+    floor: "Floor_G & Floor_S",
+  },
+  "004": {
+    name: "RTU-4 (South Wing)",
+    zoneKey: "cg016",
+    zones: "16-17, 21-24, 46-47, 51-54",
+    floor: "Floor_G & Floor_S",
+  },
+};
 
-const HVACView = ({data,current}) => { const [rtu,setRtu]=useState("001"); const info=RTU_MAP[rtu]; const c=current||{}; const sf=n(c[`sf${rtu}`]),rf=n(c[`rf${rtu}`]),flow=n(c[`fl${rtu}`]),eff=n(c[`ef${rtu}`]),dt=n(c[`dt${rtu}`]),vol=n(c[`vo${rtu}`]),cg=n(c[info.zoneKey]),oat=n(c.oat); const avail=sf>10?100:0,perf=Math.min(100,(flow/20000)*100),qual=Math.abs(cg)<COMFORT_BAND?100:50; const oee=((avail*perf*qual)/10000).toFixed(1),mtbf=(5000+parseInt(rtu)*100).toFixed(0),mttr=(2.0+parseInt(rtu)*0.2).toFixed(1); const status=sf<10?"offline":vol>5?"critical":vol>2?"warning":"online"; const cd=(data||[]).map(d=>({t:(d.t||"").slice(5,16),eff:n(d[`ef${rtu}`]),dt:n(d[`dt${rtu}`]),cg:n(d[info.zoneKey]),oat:n(d.oat)})); const iv=Math.max(1,Math.floor(cd.length/6)); return <><div style={{display:"flex",alignItems:"center",gap:14,marginBottom:16}}><select value={rtu} onChange={e=>setRtu(e.target.value)} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,color:C.cyan,fontSize:15,fontWeight:600,fontFamily:sans,padding:"8px 14px",cursor:"pointer"}}>{Object.entries(RTU_MAP).map(([id,inf])=><option key={id} value={id}>{inf.name}</option>)}</select><Badge status={status}/><span style={{fontSize:12,color:C.textDim,fontFamily:mono}}>Zones: {info.zones} | {info.floor}</span></div><div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:10}}><Metric icon={Gauge} label="OEE" value={oee} unit="%"/><Metric icon={Activity} label="Efficiency" value={eff.toFixed(0)} sub="CFM / %speed"/><Metric icon={ThermometerSun} label="Delta-T" value={dt.toFixed(1)} unit="°F"/><Metric icon={Wind} label="Supply Fan" value={sf.toFixed(0)} unit="%"/><Metric icon={Clock} label="MTBF" value={mtbf} unit="h"/><Metric icon={Clock} label="MTTR" value={mttr} unit="h"/></div><div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginTop:10}}><Metric icon={ThermometerSun} label="Comfort Gap" value={Math.abs(cg).toFixed(1)} unit="°F" sub={cg>=0?"Above setpoint":"Below setpoint"}/><Metric icon={Wind} label="Return Fan" value={rf.toFixed(0)} unit="%"/><Metric icon={Activity} label="Volatility" value={vol.toFixed(2)} sub={vol>2?"High — check dampers":"Normal"}/><Metric icon={ThermometerSun} label="Outdoor" value={oat.toFixed(1)} unit="°C"/></div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginTop:14}}><ChartBox title={`${info.name} — Efficiency Index`}><LineChart data={cd}><CartesianGrid stroke={C.border} strokeDasharray="3 3"/><XAxis dataKey="t" tick={{fontSize:9,fill:C.textDim}} interval={iv}/><YAxis tick={{fontSize:10,fill:C.textDim}} domain={[80,200]}/><Tooltip content={<TT/>}/><Line dataKey="eff" name="Efficiency" stroke={C.cyan} strokeWidth={2} dot={false}/></LineChart></ChartBox><ChartBox title="Delta-T and Zone Comfort Gap"><AreaChart data={cd}><CartesianGrid stroke={C.border} strokeDasharray="3 3"/><XAxis dataKey="t" tick={{fontSize:9,fill:C.textDim}} interval={iv}/><YAxis tick={{fontSize:10,fill:C.textDim}}/><Tooltip content={<TT/>}/><Area dataKey="dt" name="Delta-T °F" stroke={C.amber} fill={`${C.amber}18`} strokeWidth={2}/><Line dataKey="cg" name="Comfort Gap °F" stroke={C.red} strokeWidth={1.5} dot={false}/></AreaChart></ChartBox></div></>; };
+const HVACView = ({ data, current }) => {
+  const [rtu, setRtu] = useState("001");
+  const info = RTU_MAP[rtu];
+  const c = current || {};
+  const sf = n(c[`sf${rtu}`]),
+    rf = n(c[`rf${rtu}`]),
+    flow = n(c[`fl${rtu}`]),
+    eff = n(c[`ef${rtu}`]),
+    dt = n(c[`dt${rtu}`]),
+    vol = n(c[`vo${rtu}`]),
+    cg = n(c[info.zoneKey]),
+    oat = n(c.oat);
+  const avail = sf > 10 ? 100 : 0,
+    perf = Math.min(100, (flow / 20000) * 100),
+    qual = Math.abs(cg) < COMFORT_BAND ? 100 : 50;
+  const oee = ((avail * perf * qual) / 10000).toFixed(1),
+    mtbf = (5000 + parseInt(rtu) * 100).toFixed(0),
+    mttr = (2.0 + parseInt(rtu) * 0.2).toFixed(1);
+  const status =
+    sf < 10 ? "offline" : vol > 5 ? "critical" : vol > 2 ? "warning" : "online";
+  const cd = (data || []).map((d) => ({
+    t: (d.t || "").slice(5, 16),
+    eff: n(d[`ef${rtu}`]),
+    dt: n(d[`dt${rtu}`]),
+    cg: n(d[info.zoneKey]),
+    oat: n(d.oat),
+  }));
+  const iv = Math.max(1, Math.floor(cd.length / 6));
+  return (
+    <>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 14,
+          marginBottom: 16,
+        }}
+      >
+        <select
+          value={rtu}
+          onChange={(e) => setRtu(e.target.value)}
+          style={{
+            background: C.surface,
+            border: `1px solid ${C.border}`,
+            borderRadius: 8,
+            color: C.cyan,
+            fontSize: 15,
+            fontWeight: 600,
+            fontFamily: sans,
+            padding: "8px 14px",
+            cursor: "pointer",
+          }}
+        >
+          {Object.entries(RTU_MAP).map(([id, inf]) => (
+            <option key={id} value={id}>
+              {inf.name}
+            </option>
+          ))}
+        </select>
+        <Badge status={status} />
+        <span style={{ fontSize: 12, color: C.textDim, fontFamily: mono }}>
+          Zones: {info.zones} | {info.floor}
+        </span>
+      </div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(6,1fr)",
+          gap: 10,
+        }}
+      >
+        <Metric icon={Gauge} label="OEE" value={oee} unit="%" />
+        <Metric
+          icon={Activity}
+          label="Efficiency"
+          value={eff.toFixed(0)}
+          sub="CFM / %speed"
+        />
+        <Metric
+          icon={ThermometerSun}
+          label="Delta-T"
+          value={dt.toFixed(1)}
+          unit="°F"
+        />
+        <Metric icon={Wind} label="Supply Fan" value={sf.toFixed(0)} unit="%" />
+        <Metric icon={Clock} label="MTBF" value={mtbf} unit="h" />
+        <Metric icon={Clock} label="MTTR" value={mttr} unit="h" />
+      </div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(4,1fr)",
+          gap: 10,
+          marginTop: 10,
+        }}
+      >
+        <Metric
+          icon={ThermometerSun}
+          label="Comfort Gap"
+          value={Math.abs(cg).toFixed(1)}
+          unit="°F"
+          sub={cg >= 0 ? "Above setpoint" : "Below setpoint"}
+        />
+        <Metric icon={Wind} label="Return Fan" value={rf.toFixed(0)} unit="%" />
+        <Metric
+          icon={Activity}
+          label="Volatility"
+          value={vol.toFixed(2)}
+          sub={vol > 2 ? "High — check dampers" : "Normal"}
+        />
+        <Metric
+          icon={ThermometerSun}
+          label="Outdoor"
+          value={oat.toFixed(1)}
+          unit="°C"
+        />
+      </div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 12,
+          marginTop: 14,
+        }}
+      >
+        <ChartBox title={`${info.name} — Efficiency Index`}>
+          <LineChart data={cd}>
+            <CartesianGrid stroke={C.border} strokeDasharray="3 3" />
+            <XAxis
+              dataKey="t"
+              tick={{ fontSize: 9, fill: C.textDim }}
+              interval={iv}
+            />
+            <YAxis
+              tick={{ fontSize: 10, fill: C.textDim }}
+              domain={[80, 200]}
+            />
+            <Tooltip content={<TT />} />
+            <Line
+              dataKey="eff"
+              name="Efficiency"
+              stroke={C.cyan}
+              strokeWidth={2}
+              dot={false}
+            />
+          </LineChart>
+        </ChartBox>
+        <ChartBox title="Delta-T and Zone Comfort Gap">
+          <AreaChart data={cd}>
+            <CartesianGrid stroke={C.border} strokeDasharray="3 3" />
+            <XAxis
+              dataKey="t"
+              tick={{ fontSize: 9, fill: C.textDim }}
+              interval={iv}
+            />
+            <YAxis tick={{ fontSize: 10, fill: C.textDim }} />
+            <Tooltip content={<TT />} />
+            <Area
+              dataKey="dt"
+              name="Delta-T °F"
+              stroke={C.amber}
+              fill={`${C.amber}18`}
+              strokeWidth={2}
+            />
+            <Line
+              dataKey="cg"
+              name="Comfort Gap °F"
+              stroke={C.red}
+              strokeWidth={1.5}
+              dot={false}
+            />
+          </AreaChart>
+        </ChartBox>
+      </div>
+    </>
+  );
+};
 
-const PumpsView = ({data,current}) => { const c=current||{}; const vib=n(c.vib),pwr=n(c.pwr),hwc=n(c.hwc); const rul=Math.max(0,(VIB_FAIL-vib)/0.18).toFixed(0); const status=vib>7?"critical":vib>VIB_WARN?"warning":vib>0?"online":"offline"; const mtbf=Math.max(500,6000-vib*500).toFixed(0),mttr=(2.5+vib*0.3).toFixed(1),pumpOee=Math.max(0,100-Math.max(0,vib-2.5)*12).toFixed(0); const cd=(data||[]).map(d=>({t:(d.t||"").slice(5,16),vib:n(d.vib),pwr:n(d.pwr),hwc:n(d.hwc)})); const iv=Math.max(1,Math.floor(cd.length/6)); return <><div style={{display:"flex",alignItems:"center",gap:14,marginBottom:16}}><span style={{fontSize:16,fontWeight:700,color:C.text}}>HWP-01 — Primary Hot Water Pump</span><Badge status={status}/></div><div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:10}}><Metric icon={Activity} label="Vibration" value={vib.toFixed(2)} unit="mm/s" sub={`Limit: ${VIB_FAIL}`}/><Metric icon={Zap} label="Power" value={pwr.toFixed(1)} unit="kW" sub={pwr>0?`+${((pwr/8-1)*100).toFixed(0)}% vs baseline`:"Awaiting data"}/><Metric icon={Clock} label="Predicted RUL" value={rul} unit="days"/><Metric icon={Gauge} label="Pump OEE" value={pumpOee} unit="%"/><Metric icon={Clock} label="MTBF" value={mtbf} unit="h"/><Metric icon={Clock} label="MTTR" value={mttr} unit="h"/></div><div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginTop:10}}><Metric icon={Droplets} label="HW Temp" value={hwc>0?hwc.toFixed(1):"—"} unit="°C" sub={hwc>0&&hwc<LEG_LIMIT?"Below 60°C — risk":hwc>0?"Compliant":"Awaiting data"}/><Metric icon={ThermometerSun} label="Legionella" value={hwc>0&&hwc<LEG_LIMIT?"RISK":hwc>0?"OK":"—"} sub="HSG274 threshold: 60°C"/><Metric icon={Activity} label="Degradation" value={vib>0?((vib/VIB_FAIL)*100).toFixed(0):"—"} unit={vib>0?"%":""} sub="Of failure threshold"/></div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginTop:14}}><ChartBox title="Bearing Vibration — Run-to-Failure Curve" h={220}><AreaChart data={cd}><CartesianGrid stroke={C.border} strokeDasharray="3 3"/><XAxis dataKey="t" tick={{fontSize:9,fill:C.textDim}} interval={iv}/><YAxis tick={{fontSize:10,fill:C.textDim}} domain={[0,10]}/><Tooltip content={<TT/>}/><ReferenceLine y={VIB_FAIL} stroke={C.red} strokeDasharray="5 5"/><ReferenceLine y={VIB_WARN} stroke={C.amber} strokeDasharray="3 3"/><Area dataKey="vib" name="Vibration mm/s" stroke={C.red} fill={`${C.red}18`} strokeWidth={2}/></AreaChart></ChartBox><ChartBox title="Power Consumption Trending" h={220}><AreaChart data={cd}><CartesianGrid stroke={C.border} strokeDasharray="3 3"/><XAxis dataKey="t" tick={{fontSize:9,fill:C.textDim}} interval={iv}/><YAxis tick={{fontSize:10,fill:C.textDim}} domain={[5,14]}/><Tooltip content={<TT/>}/><ReferenceLine y={8.0} stroke={C.textDim} strokeDasharray="3 3"/><Area dataKey="pwr" name="Power kW" stroke={C.amber} fill={`${C.amber}18`} strokeWidth={2}/></AreaChart></ChartBox></div></>; };
+const PumpsView = ({ data, current }) => {
+  const c = current || {};
+  const vib = n(c.vib),
+    pwr = n(c.pwr),
+    hwc = n(c.hwc);
+  const rul = Math.max(0, (VIB_FAIL - vib) / 0.18).toFixed(0);
+  const status =
+    vib > 7
+      ? "critical"
+      : vib > VIB_WARN
+        ? "warning"
+        : vib > 0
+          ? "online"
+          : "offline";
+  const mtbf = Math.max(500, 6000 - vib * 500).toFixed(0),
+    mttr = (2.5 + vib * 0.3).toFixed(1),
+    pumpOee = Math.max(0, 100 - Math.max(0, vib - 2.5) * 12).toFixed(0);
+  const cd = (data || []).map((d) => ({
+    t: (d.t || "").slice(5, 16),
+    vib: n(d.vib),
+    pwr: n(d.pwr),
+    hwc: n(d.hwc),
+  }));
+  const iv = Math.max(1, Math.floor(cd.length / 6));
+  return (
+    <>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 14,
+          marginBottom: 16,
+        }}
+      >
+        <span style={{ fontSize: 16, fontWeight: 700, color: C.text }}>
+          HWP-01 — Primary Hot Water Pump
+        </span>
+        <Badge status={status} />
+      </div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(6,1fr)",
+          gap: 10,
+        }}
+      >
+        <Metric
+          icon={Activity}
+          label="Vibration"
+          value={vib.toFixed(2)}
+          unit="mm/s"
+          sub={`Limit: ${VIB_FAIL}`}
+        />
+        <Metric
+          icon={Zap}
+          label="Power"
+          value={pwr.toFixed(1)}
+          unit="kW"
+          sub={
+            pwr > 0
+              ? `+${((pwr / 8 - 1) * 100).toFixed(0)}% vs baseline`
+              : "Awaiting data"
+          }
+        />
+        <Metric icon={Clock} label="Predicted RUL" value={rul} unit="days" />
+        <Metric icon={Gauge} label="Pump OEE" value={pumpOee} unit="%" />
+        <Metric icon={Clock} label="MTBF" value={mtbf} unit="h" />
+        <Metric icon={Clock} label="MTTR" value={mttr} unit="h" />
+      </div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(3,1fr)",
+          gap: 10,
+          marginTop: 10,
+        }}
+      >
+        <Metric
+          icon={Droplets}
+          label="HW Temp"
+          value={hwc > 0 ? hwc.toFixed(1) : "—"}
+          unit="°C"
+          sub={
+            hwc > 0 && hwc < LEG_LIMIT
+              ? "Below 60°C — risk"
+              : hwc > 0
+                ? "Compliant"
+                : "Awaiting data"
+          }
+        />
+        <Metric
+          icon={ThermometerSun}
+          label="Legionella"
+          value={hwc > 0 && hwc < LEG_LIMIT ? "RISK" : hwc > 0 ? "OK" : "—"}
+          sub="HSG274 threshold: 60°C"
+        />
+        <Metric
+          icon={Activity}
+          label="Degradation"
+          value={vib > 0 ? ((vib / VIB_FAIL) * 100).toFixed(0) : "—"}
+          unit={vib > 0 ? "%" : ""}
+          sub="Of failure threshold"
+        />
+      </div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 12,
+          marginTop: 14,
+        }}
+      >
+        <ChartBox title="Bearing Vibration — Run-to-Failure Curve" h={220}>
+          <AreaChart data={cd}>
+            <CartesianGrid stroke={C.border} strokeDasharray="3 3" />
+            <XAxis
+              dataKey="t"
+              tick={{ fontSize: 9, fill: C.textDim }}
+              interval={iv}
+            />
+            <YAxis tick={{ fontSize: 10, fill: C.textDim }} domain={[0, 10]} />
+            <Tooltip content={<TT />} />
+            <ReferenceLine y={VIB_FAIL} stroke={C.red} strokeDasharray="5 5" />
+            <ReferenceLine
+              y={VIB_WARN}
+              stroke={C.amber}
+              strokeDasharray="3 3"
+            />
+            <Area
+              dataKey="vib"
+              name="Vibration mm/s"
+              stroke={C.red}
+              fill={`${C.red}18`}
+              strokeWidth={2}
+            />
+          </AreaChart>
+        </ChartBox>
+        <ChartBox title="Power Consumption Trending" h={220}>
+          <AreaChart data={cd}>
+            <CartesianGrid stroke={C.border} strokeDasharray="3 3" />
+            <XAxis
+              dataKey="t"
+              tick={{ fontSize: 9, fill: C.textDim }}
+              interval={iv}
+            />
+            <YAxis tick={{ fontSize: 10, fill: C.textDim }} domain={[5, 14]} />
+            <Tooltip content={<TT />} />
+            <ReferenceLine y={8.0} stroke={C.textDim} strokeDasharray="3 3" />
+            <Area
+              dataKey="pwr"
+              name="Power kW"
+              stroke={C.amber}
+              fill={`${C.amber}18`}
+              strokeWidth={2}
+            />
+          </AreaChart>
+        </ChartBox>
+      </div>
+    </>
+  );
+};
 
-const EnergyView = ({data,current}) => { const c=current||{}; const te=n(c.te),hp=n(c.hp),hs=n(c.hs),hn=n(c.hn),li=n(c.li),gh=n(c.gh); const cd=(data||[]).map(d=>({t:(d.t||"").slice(5,16),te:n(d.te),hs:n(d.hs),hn:n(d.hn)})); const iv=Math.max(1,Math.floor(cd.length/5)); return <><div style={{display:"flex",alignItems:"center",gap:14,marginBottom:16}}><span style={{fontSize:16,fontWeight:700,color:C.text}}>ELEC-MAIN — Electrical Distribution</span><Badge status={te>0?"online":"offline"}/></div><div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:10}}><Metric icon={Zap} label="Total Load" value={te.toFixed(0)} unit="kW"/><Metric icon={Zap} label="HVAC Share" value={hp.toFixed(0)} unit="%"/><Metric icon={Zap} label="HVAC South" value={hs.toFixed(1)} unit="kW"/><Metric icon={Zap} label="HVAC North" value={hn.toFixed(1)} unit="kW"/><Metric icon={AlertTriangle} label="Ghost Light" value={gh?"ALERT":"Clear"} sub={gh?"Lights on — unoccupied":"Normal"}/></div><div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginTop:10}}><Metric icon={Zap} label="Lighting" value={li.toFixed(2)} unit="kW"/><Metric icon={Gauge} label="Panel OEE" value="99.9" unit="%"/><Metric icon={Clock} label="MTBF" value="12000" unit="h"/><Metric icon={Clock} label="MTTR" value="0.5" unit="h"/></div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginTop:14}}><ChartBox title="Building Energy Consumption" h={220}><BarChart data={cd}><CartesianGrid stroke={C.border} strokeDasharray="3 3"/><XAxis dataKey="t" tick={{fontSize:9,fill:C.textDim}} interval={iv}/><YAxis tick={{fontSize:10,fill:C.textDim}}/><Tooltip content={<TT/>}/><Bar dataKey="te" name="Total kW" fill={`${C.cyan}80`} radius={[3,3,0,0]}/></BarChart></ChartBox><ChartBox title="HVAC Breakdown (North vs South)" h={220}><AreaChart data={cd}><CartesianGrid stroke={C.border} strokeDasharray="3 3"/><XAxis dataKey="t" tick={{fontSize:9,fill:C.textDim}} interval={iv}/><YAxis tick={{fontSize:10,fill:C.textDim}}/><Tooltip content={<TT/>}/><Area dataKey="hs" name="HVAC South kW" stroke={C.cyan} fill={`${C.cyan}15`} strokeWidth={1.5}/><Area dataKey="hn" name="HVAC North kW" stroke={C.purple} fill={`${C.purple}15`} strokeWidth={1.5}/></AreaChart></ChartBox></div></>; };
+const EnergyView = ({ data, current }) => {
+  const c = current || {};
+  const te = n(c.te),
+    hp = n(c.hp),
+    hs = n(c.hs),
+    hn = n(c.hn),
+    li = n(c.li),
+    gh = n(c.gh);
+  const cd = (data || []).map((d) => ({
+    t: (d.t || "").slice(5, 16),
+    te: n(d.te),
+    hs: n(d.hs),
+    hn: n(d.hn),
+  }));
+  const iv = Math.max(1, Math.floor(cd.length / 5));
+  return (
+    <>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 14,
+          marginBottom: 16,
+        }}
+      >
+        <span style={{ fontSize: 16, fontWeight: 700, color: C.text }}>
+          ELEC-MAIN — Electrical Distribution
+        </span>
+        <Badge status={te > 0 ? "online" : "offline"} />
+      </div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(5,1fr)",
+          gap: 10,
+        }}
+      >
+        <Metric icon={Zap} label="Total Load" value={te.toFixed(0)} unit="kW" />
+        <Metric icon={Zap} label="HVAC Share" value={hp.toFixed(0)} unit="%" />
+        <Metric icon={Zap} label="HVAC South" value={hs.toFixed(1)} unit="kW" />
+        <Metric icon={Zap} label="HVAC North" value={hn.toFixed(1)} unit="kW" />
+        <Metric
+          icon={AlertTriangle}
+          label="Ghost Light"
+          value={gh ? "ALERT" : "Clear"}
+          sub={gh ? "Lights on — unoccupied" : "Normal"}
+        />
+      </div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(4,1fr)",
+          gap: 10,
+          marginTop: 10,
+        }}
+      >
+        <Metric icon={Zap} label="Lighting" value={li.toFixed(2)} unit="kW" />
+        <Metric icon={Gauge} label="Panel OEE" value="99.9" unit="%" />
+        <Metric icon={Clock} label="MTBF" value="12000" unit="h" />
+        <Metric icon={Clock} label="MTTR" value="0.5" unit="h" />
+      </div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 12,
+          marginTop: 14,
+        }}
+      >
+        <ChartBox title="Building Energy Consumption" h={220}>
+          <BarChart data={cd}>
+            <CartesianGrid stroke={C.border} strokeDasharray="3 3" />
+            <XAxis
+              dataKey="t"
+              tick={{ fontSize: 9, fill: C.textDim }}
+              interval={iv}
+            />
+            <YAxis tick={{ fontSize: 10, fill: C.textDim }} />
+            <Tooltip content={<TT />} />
+            <Bar
+              dataKey="te"
+              name="Total kW"
+              fill={`${C.cyan}80`}
+              radius={[3, 3, 0, 0]}
+            />
+          </BarChart>
+        </ChartBox>
+        <ChartBox title="HVAC Breakdown (North vs South)" h={220}>
+          <AreaChart data={cd}>
+            <CartesianGrid stroke={C.border} strokeDasharray="3 3" />
+            <XAxis
+              dataKey="t"
+              tick={{ fontSize: 9, fill: C.textDim }}
+              interval={iv}
+            />
+            <YAxis tick={{ fontSize: 10, fill: C.textDim }} />
+            <Tooltip content={<TT />} />
+            <Area
+              dataKey="hs"
+              name="HVAC South kW"
+              stroke={C.cyan}
+              fill={`${C.cyan}15`}
+              strokeWidth={1.5}
+            />
+            <Area
+              dataKey="hn"
+              name="HVAC North kW"
+              stroke={C.purple}
+              fill={`${C.purple}15`}
+              strokeWidth={1.5}
+            />
+          </AreaChart>
+        </ChartBox>
+      </div>
+    </>
+  );
+};
 
-const ComplianceView = ({data,current}) => { const c=current||{}; const hwc=n(c.hwc),vib=n(c.vib),cg=n(c.cg036||c.cg016||c.cg018||c.cg019),gh=n(c.gh); const checks=[{name:"Hot Water > 60°C (HSG274)",pass:hwc>=LEG_LIMIT||hwc===0,val:hwc>0?`${hwc.toFixed(1)}°C`:"No data"},{name:"Zone Comfort ±2°F (CIBSE)",pass:Math.abs(cg)<COMFORT_BAND,val:`${Math.abs(cg).toFixed(1)}°F gap`},{name:"Equipment Vibration (ISO 10816)",pass:vib<VIB_FAIL||vib===0,val:vib>0?`${vib.toFixed(1)} mm/s`:"No data"},{name:"Ghost Lighting",pass:!gh,val:gh?"Detected":"Clear"}]; const passed=checks.filter(x=>x.pass).length; const cd=(data||[]).map(d=>({t:(d.t||"").slice(5,16),hwc:n(d.hwc)})); const iv=Math.max(1,Math.floor(cd.length/6)); return <><div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}><Metric icon={Shield} label="Score" value={`${passed}/${checks.length}`} sub={passed===checks.length?"All compliant":`${checks.length-passed} issue(s)`}/><Metric icon={Droplets} label="HW Temp" value={hwc>0?hwc.toFixed(1):"—"} unit="°C" sub={hwc>0&&hwc<LEG_LIMIT?"Below limit":hwc>0?"Compliant":"Awaiting data"}/><Metric icon={Activity} label="Vibration" value={vib>0?vib.toFixed(1):"—"} unit="mm/s"/><Metric icon={ThermometerSun} label="Comfort Gap" value={Math.abs(cg).toFixed(1)} unit="°F"/></div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginTop:14}}><div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:18}}><div style={{fontSize:14,fontWeight:600,color:C.textMuted,marginBottom:14,fontFamily:mono}}>Compliance Checks</div>{checks.map((ch,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",background:C.surfaceAlt,borderRadius:8,marginBottom:8,borderLeft:`3px solid ${ch.pass?C.green:C.red}`}}>{ch.pass?<CheckCircle size={16} color={C.green}/>:<XCircle size={16} color={C.red}/>}<div style={{flex:1}}><div style={{fontSize:14,color:C.text,fontWeight:500}}>{ch.name}</div><div style={{fontSize:12,color:C.textDim}}>{ch.val}</div></div><Badge status={ch.pass?"compliant":"breach"}/></div>)}</div><ChartBox title="Hot Water Temperature — Legionella Monitor" h={240}><AreaChart data={cd}><CartesianGrid stroke={C.border} strokeDasharray="3 3"/><XAxis dataKey="t" tick={{fontSize:9,fill:C.textDim}} interval={iv}/><YAxis tick={{fontSize:10,fill:C.textDim}} domain={[54,68]}/><Tooltip content={<TT/>}/><ReferenceLine y={60} stroke={C.red} strokeDasharray="5 5"/><Area dataKey="hwc" name="HW Temp °C" stroke={C.cyan} fill={`${C.cyan}12`} strokeWidth={2}/></AreaChart></ChartBox></div></>; };
+const ComplianceView = ({ data, current }) => {
+  const c = current || {};
+  const hwc = n(c.hwc),
+    vib = n(c.vib),
+    cg = n(c.cg036 || c.cg016 || c.cg018 || c.cg019),
+    gh = n(c.gh);
+  const checks = [
+    {
+      name: "Hot Water > 60°C (HSG274)",
+      pass: hwc >= LEG_LIMIT || hwc === 0,
+      val: hwc > 0 ? `${hwc.toFixed(1)}°C` : "No data",
+    },
+    {
+      name: "Zone Comfort ±2°F (CIBSE)",
+      pass: Math.abs(cg) < COMFORT_BAND,
+      val: `${Math.abs(cg).toFixed(1)}°F gap`,
+    },
+    {
+      name: "Equipment Vibration (ISO 10816)",
+      pass: vib < VIB_FAIL || vib === 0,
+      val: vib > 0 ? `${vib.toFixed(1)} mm/s` : "No data",
+    },
+    { name: "Ghost Lighting", pass: !gh, val: gh ? "Detected" : "Clear" },
+  ];
+  const passed = checks.filter((x) => x.pass).length;
+  const cd = (data || []).map((d) => ({
+    t: (d.t || "").slice(5, 16),
+    hwc: n(d.hwc),
+  }));
+  const iv = Math.max(1, Math.floor(cd.length / 6));
+  return (
+    <>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(4,1fr)",
+          gap: 10,
+        }}
+      >
+        <Metric
+          icon={Shield}
+          label="Score"
+          value={`${passed}/${checks.length}`}
+          sub={
+            passed === checks.length
+              ? "All compliant"
+              : `${checks.length - passed} issue(s)`
+          }
+        />
+        <Metric
+          icon={Droplets}
+          label="HW Temp"
+          value={hwc > 0 ? hwc.toFixed(1) : "—"}
+          unit="°C"
+          sub={
+            hwc > 0 && hwc < LEG_LIMIT
+              ? "Below limit"
+              : hwc > 0
+                ? "Compliant"
+                : "Awaiting data"
+          }
+        />
+        <Metric
+          icon={Activity}
+          label="Vibration"
+          value={vib > 0 ? vib.toFixed(1) : "—"}
+          unit="mm/s"
+        />
+        <Metric
+          icon={ThermometerSun}
+          label="Comfort Gap"
+          value={Math.abs(cg).toFixed(1)}
+          unit="°F"
+        />
+      </div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 12,
+          marginTop: 14,
+        }}
+      >
+        <div
+          style={{
+            background: C.surface,
+            border: `1px solid ${C.border}`,
+            borderRadius: 10,
+            padding: 18,
+          }}
+        >
+          <div
+            style={{
+              fontSize: 14,
+              fontWeight: 600,
+              color: C.textMuted,
+              marginBottom: 14,
+              fontFamily: mono,
+            }}
+          >
+            Compliance Checks
+          </div>
+          {checks.map((ch, i) => (
+            <div
+              key={i}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                padding: "12px 14px",
+                background: C.surfaceAlt,
+                borderRadius: 8,
+                marginBottom: 8,
+                borderLeft: `3px solid ${ch.pass ? C.green : C.red}`,
+              }}
+            >
+              {ch.pass ? (
+                <CheckCircle size={16} color={C.green} />
+              ) : (
+                <XCircle size={16} color={C.red} />
+              )}
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, color: C.text, fontWeight: 500 }}>
+                  {ch.name}
+                </div>
+                <div style={{ fontSize: 12, color: C.textDim }}>{ch.val}</div>
+              </div>
+              <Badge status={ch.pass ? "compliant" : "breach"} />
+            </div>
+          ))}
+        </div>
+        <ChartBox title="Hot Water Temperature — Legionella Monitor" h={240}>
+          <AreaChart data={cd}>
+            <CartesianGrid stroke={C.border} strokeDasharray="3 3" />
+            <XAxis
+              dataKey="t"
+              tick={{ fontSize: 9, fill: C.textDim }}
+              interval={iv}
+            />
+            <YAxis tick={{ fontSize: 10, fill: C.textDim }} domain={[54, 68]} />
+            <Tooltip content={<TT />} />
+            <ReferenceLine y={60} stroke={C.red} strokeDasharray="5 5" />
+            <Area
+              dataKey="hwc"
+              name="HW Temp °C"
+              stroke={C.cyan}
+              fill={`${C.cyan}12`}
+              strokeWidth={2}
+            />
+          </AreaChart>
+        </ChartBox>
+      </div>
+    </>
+  );
+};
 
-async function fetchLatestBlob(url) { if(!url) return null; try { const sep=url.includes("?")?"&":"?"; const lr=await fetch(`${url}${sep}comp=list&restype=container`); if(!lr.ok) return null; const xml=await lr.text(); const names=[...xml.matchAll(/<Name>(.*?)<\/Name>/g)].map(m=>m[1]); if(!names.length) return null; const base=url.split("?")[0],sas=url.split("?")[1]; const br=await fetch(`${base}/${names[names.length-1]}?${sas}`); if(!br.ok) return null; const txt=await br.text(); const lines=txt.split("\n").filter(l=>l.trim()); return lines.length?JSON.parse(lines[lines.length-1]):null; } catch(e) { console.warn("Blob error:",e); return null; } }
+async function fetchLatestBlob(url) {
+  if (!url) return null;
+  try {
+    const sep = url.includes("?") ? "&" : "?";
+    const lr = await fetch(`${url}${sep}comp=list&restype=container`);
+    if (!lr.ok) return null;
+    const xml = await lr.text();
+    const names = [...xml.matchAll(/<Name>(.*?)<\/Name>/g)].map((m) => m[1]);
+    if (!names.length) return null;
+    const base = url.split("?")[0],
+      sas = url.split("?")[1];
+    const br = await fetch(`${base}/${names[names.length - 1]}?${sas}`);
+    if (!br.ok) return null;
+    const txt = await br.text();
+    const lines = txt.split("\n").filter((l) => l.trim());
+    return lines.length ? JSON.parse(lines[lines.length - 1]) : null;
+  } catch (e) {
+    console.warn("Blob error:", e);
+    return null;
+  }
+}
 
-function mapBlobToLocal(hvac,pumps,elec,compliance) { const r={t:""}; if(hvac) { r.t=(hvac.WindowEndTime||"").replace("T"," ").slice(0,16); r.ef001=n(hvac.efficiency); r.sf001=n(hvac.sf_pct); r.rf001=n(hvac.rf_pct); r.fl001=n(hvac.flow_cfm); r.dt001=n(hvac.delta_t); r.vo001=n(hvac.volatility); r.cg036=n(hvac.comfort_gap); r.oat=n(hvac.outdoor_temp); r.hum=n(hvac.humidity); r.ef002=r.ef001;r.sf002=r.sf001;r.rf002=r.rf001;r.fl002=r.fl001;r.dt002=r.dt001;r.vo002=r.vo001; r.ef003=r.ef001;r.sf003=r.sf001;r.rf003=r.rf001;r.fl003=r.fl001;r.dt003=r.dt001;r.vo003=r.vo001; r.ef004=r.ef001;r.sf004=r.sf001;r.rf004=r.rf001;r.fl004=r.fl001;r.dt004=r.dt001;r.vo004=r.vo001; r.cg016=r.cg036;r.cg018=r.cg036;r.cg019=r.cg036; } if(pumps) { if(!r.t) r.t=(pumps.WindowEndTime||"").replace("T"," ").slice(0,16); r.vib=n(pumps.vibration);r.pwr=n(pumps.power_kw);r.hwc=n(pumps.hw_temp_c); } if(elec) { if(!r.t) r.t=(elec.WindowEndTime||"").replace("T"," ").slice(0,16); r.te=n(elec.total_kw);r.hs=n(elec.hvac_south);r.hn=n(elec.hvac_north);r.li=n(elec.lighting);r.hp=n(elec.hvac_pct);r.gh=n(elec.ghost_alerts); } if(compliance) { if(!r.t) r.t=(compliance.WindowEndTime||"").replace("T"," ").slice(0,16); if(n(compliance.hw_temp_c)>0) r.hwc=n(compliance.hw_temp_c); } if(!r.t) r.t=new Date().toISOString().replace("T"," ").slice(0,16); return r; }
+function mapBlobToLocal(hvac, pumps, elec, compliance) {
+  const r = { t: "" };
+  if (hvac) {
+    r.t = (hvac.WindowEndTime || "").replace("T", " ").slice(0, 16);
+    r.ef001 = n(hvac.efficiency);
+    r.sf001 = n(hvac.sf_pct);
+    r.rf001 = n(hvac.rf_pct);
+    r.fl001 = n(hvac.flow_cfm);
+    r.dt001 = n(hvac.delta_t);
+    r.vo001 = n(hvac.volatility);
+    r.cg036 = n(hvac.comfort_gap);
+    r.oat = n(hvac.outdoor_temp);
+    r.hum = n(hvac.humidity);
+    r.ef002 = r.ef001;
+    r.sf002 = r.sf001;
+    r.rf002 = r.rf001;
+    r.fl002 = r.fl001;
+    r.dt002 = r.dt001;
+    r.vo002 = r.vo001;
+    r.ef003 = r.ef001;
+    r.sf003 = r.sf001;
+    r.rf003 = r.rf001;
+    r.fl003 = r.fl001;
+    r.dt003 = r.dt001;
+    r.vo003 = r.vo001;
+    r.ef004 = r.ef001;
+    r.sf004 = r.sf001;
+    r.rf004 = r.rf001;
+    r.fl004 = r.fl001;
+    r.dt004 = r.dt001;
+    r.vo004 = r.vo001;
+    r.cg016 = r.cg036;
+    r.cg018 = r.cg036;
+    r.cg019 = r.cg036;
+  }
+  if (pumps) {
+    if (!r.t) r.t = (pumps.WindowEndTime || "").replace("T", " ").slice(0, 16);
+    r.vib = n(pumps.vibration);
+    r.pwr = n(pumps.power_kw);
+    r.hwc = n(pumps.hw_temp_c);
+  }
+  if (elec) {
+    if (!r.t) r.t = (elec.WindowEndTime || "").replace("T", " ").slice(0, 16);
+    r.te = n(elec.total_kw);
+    r.hs = n(elec.hvac_south);
+    r.hn = n(elec.hvac_north);
+    r.li = n(elec.lighting);
+    r.hp = n(elec.hvac_pct);
+    r.gh = n(elec.ghost_alerts);
+  }
+  if (compliance) {
+    if (!r.t)
+      r.t = (compliance.WindowEndTime || "").replace("T", " ").slice(0, 16);
+    if (n(compliance.hw_temp_c) > 0) r.hwc = n(compliance.hw_temp_c);
+  }
+  if (!r.t) r.t = new Date().toISOString().replace("T", " ").slice(0, 16);
+  return r;
+}
 
-export default function App() { const [sector,setSector]=useState("hvac"); const [idx,setIdx]=useState(0); const [playing,setPlaying]=useState(true); const [speed,setSpeed]=useState(1500); const [dataSource,setDataSource]=useState("replay"); const [rawData,setRawData]=useState([]); const [liveData,setLiveData]=useState([]); const [connStatus,setConnStatus]=useState("Replay Mode"); const timerRef=useRef(null);
-useEffect(()=>{fetch("telemetry_full.json").then(r=>r.json()).then(d=>{setRawData(d);console.log(`Loaded ${d.length} local records`)}).catch(()=>console.warn("telemetry_full.json not found"))},[]);
-useEffect(()=>{if(dataSource!=="azure"){setConnStatus("Replay Mode");return;} const poll=async()=>{setConnStatus("Connecting...");try{const[h,p,e,c]=await Promise.all([fetchLatestBlob(BLOB_CONFIG.hvacUrl),fetchLatestBlob(BLOB_CONFIG.pumpsUrl),fetchLatestBlob(BLOB_CONFIG.elecUrl),fetchLatestBlob(BLOB_CONFIG.complianceUrl)]);if(h||p||e||c){setLiveData(prev=>[...prev,mapBlobToLocal(h,p,e,c)].slice(-CHART_WINDOW));setConnStatus(`Connected: Update at ${new Date().toLocaleTimeString()}`)}else{setConnStatus("Connected — no new blobs")}}catch(er){console.error("Poll error:",er);setConnStatus("Error: Check CORS / SAS")}}; poll(); const iv=setInterval(poll,BLOB_CONFIG.pollIntervalMs); return()=>clearInterval(iv)},[dataSource]);
-useEffect(()=>{if(playing&&dataSource==="replay"&&rawData.length>0){timerRef.current=setInterval(()=>setIdx(p=>(p+1)%rawData.length),speed)} return()=>clearInterval(timerRef.current)},[playing,speed,rawData.length,dataSource]);
-const activeData=dataSource==="azure"&&liveData.length>0?liveData:rawData; if(!activeData.length) return <div style={{background:C.bg,color:C.textMuted,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:mono,fontSize:14}}>Loading telemetry data...</div>;
-const ci=dataSource==="azure"?activeData.length-1:idx%activeData.length; const current=activeData[ci]||{}; const history=dataSource==="azure"?activeData:activeData.slice(0,ci+1).slice(-CHART_WINDOW); const isLive=dataSource==="azure";
-const tabs=[{id:"hvac",label:"HVAC",icon:Wind},{id:"pumps",label:"Pumps & Plant",icon:Droplets},{id:"energy",label:"Electrical",icon:Zap},{id:"compliance",label:"Compliance",icon:Shield}];
-return <div style={{minHeight:"100vh",background:C.bg,color:C.text,fontFamily:sans}}>
-<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 24px",borderBottom:`1px solid ${C.border}`,background:C.surface}}>
-<div style={{display:"flex",alignItems:"center",gap:14}}><div style={{width:32,height:32,borderRadius:8,background:`linear-gradient(135deg,${C.cyan}40,${C.purple}40)`,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center"}}><Activity size={15} color={C.cyan}/></div><div><div style={{fontSize:16,fontWeight:700,letterSpacing:-0.3}}>Building 59 — Asset Performance Centre</div><div style={{fontSize:11,color:C.textDim,fontFamily:mono}}>BLDG59-LBNL-BERKELEY</div></div></div>
-<div style={{display:"flex",alignItems:"center",gap:14}}>
-<button onClick={()=>{setDataSource(p=>p==="replay"?"azure":"replay");setLiveData([])}} style={{padding:"6px 14px",borderRadius:6,fontSize:12,fontWeight:700,fontFamily:mono,background:isLive?`${C.green}18`:C.surfaceAlt,border:`1px solid ${isLive?C.green:C.border}`,color:isLive?C.green:C.textMuted,cursor:"pointer"}}>{isLive?"LIVE — Azure Blob":"REPLAY — Local Data"}</button>
-{!isLive&&<div style={{display:"flex",alignItems:"center",gap:6,padding:"4px 10px",background:C.surfaceAlt,borderRadius:6,border:`1px solid ${C.border}`}}><button onClick={()=>setPlaying(!playing)} style={{background:"none",border:"none",cursor:"pointer",color:C.text,display:"flex",padding:3}}>{playing?<Pause size={13}/>:<Play size={13}/>}</button><button onClick={()=>setIdx(p=>Math.min(p+10,rawData.length-1))} style={{background:"none",border:"none",cursor:"pointer",color:C.textMuted,display:"flex",padding:3}}><SkipForward size={13}/></button><select value={speed} onChange={e=>setSpeed(Number(e.target.value))} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:4,color:C.textMuted,fontSize:11,fontFamily:mono,padding:"2px 6px"}}>{SPEED_OPTIONS.map(s=><option key={s} value={s}>{s<1000?"0.5s":`${s/1000}s`}</option>)}</select></div>}
-<div style={{display:"flex",alignItems:"center",gap:8,padding:"5px 14px",background:C.surfaceAlt,borderRadius:6,border:`1px solid ${C.border}`}}><span style={{width:7,height:7,borderRadius:"50%",background:isLive?(liveData.length>0?C.green:C.amber):C.textDim,animation:isLive||playing?"pulse 1.5s infinite":"none"}}/><span style={{fontSize:12,fontFamily:mono,color:C.textMuted}}>{connStatus}</span></div>
-{!isLive&&<div style={{fontSize:12,fontFamily:mono,color:C.textMuted,padding:"4px 10px",background:C.surfaceAlt,borderRadius:6}}>{ci+1} / {rawData.length}</div>}
-</div></div>
-<div style={{display:"flex",gap:6,padding:"10px 24px",borderBottom:`1px solid ${C.border}`}}>{tabs.map(tab=>{const Icon=tab.icon;const active=sector===tab.id;return <button key={tab.id} onClick={()=>setSector(tab.id)} style={{display:"flex",alignItems:"center",gap:7,padding:"8px 16px",background:active?`${C.cyan}12`:"transparent",border:active?`1px solid ${C.cyan}30`:"1px solid transparent",borderRadius:8,color:active?C.cyan:C.textDim,fontSize:14,fontWeight:active?600:400,cursor:"pointer",fontFamily:sans,transition:"all 0.15s"}}><Icon size={15}/>{tab.label}</button>})}</div>
-<div style={{padding:24}}>{sector==="hvac"&&<HVACView data={history} current={current}/>}{sector==="pumps"&&<PumpsView data={history} current={current}/>}{sector==="energy"&&<EnergyView data={history} current={current}/>}{sector==="compliance"&&<ComplianceView data={history} current={current}/>}</div>
-<div style={{padding:"10px 24px",borderTop:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between"}}><span style={{fontSize:11,color:C.textDim,fontFamily:mono}}>Data: LBNL Building 59 Operational Dataset (Luo et al., 2022, Nature Scientific Data) — Enriched with physics-informed synthetic degradation</span><span style={{fontSize:11,color:C.textDim,fontFamily:mono}}>v2.1 — Dynamic Replay + Azure Live</span></div>
-<style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}`}</style></div>; }
+export default function App() {
+  const [sector, setSector] = useState("hvac");
+  const [idx, setIdx] = useState(0);
+  const [playing, setPlaying] = useState(true);
+  const [speed, setSpeed] = useState(1500);
+  const [dataSource, setDataSource] = useState("replay");
+  const [rawData, setRawData] = useState([]);
+  const [liveData, setLiveData] = useState([]);
+  const [connStatus, setConnStatus] = useState("Replay Mode");
+  const timerRef = useRef(null);
+  useEffect(() => {
+    fetch("telemetry_full.json")
+      .then((r) => r.json())
+      .then((d) => {
+        setRawData(d);
+        console.log(`Loaded ${d.length} local records`);
+      })
+      .catch(() => console.warn("telemetry_full.json not found"));
+  }, []);
+  useEffect(() => {
+    if (dataSource !== "azure") {
+      setConnStatus("Replay Mode");
+      return;
+    }
+    const poll = async () => {
+      setConnStatus("Connecting...");
+      try {
+        const [h, p, e, c] = await Promise.all([
+          fetchLatestBlob(BLOB_CONFIG.hvacUrl),
+          fetchLatestBlob(BLOB_CONFIG.pumpsUrl),
+          fetchLatestBlob(BLOB_CONFIG.elecUrl),
+          fetchLatestBlob(BLOB_CONFIG.complianceUrl),
+        ]);
+        if (h || p || e || c) {
+          setLiveData((prev) =>
+            [...prev, mapBlobToLocal(h, p, e, c)].slice(-CHART_WINDOW),
+          );
+          setConnStatus(
+            `Connected: Update at ${new Date().toLocaleTimeString()}`,
+          );
+        } else {
+          setConnStatus("Connected — no new blobs");
+        }
+      } catch (er) {
+        console.error("Poll error:", er);
+        setConnStatus("Error: Check CORS / SAS");
+      }
+    };
+    poll();
+    const iv = setInterval(poll, BLOB_CONFIG.pollIntervalMs);
+    return () => clearInterval(iv);
+  }, [dataSource]);
+  useEffect(() => {
+    if (playing && dataSource === "replay" && rawData.length > 0) {
+      timerRef.current = setInterval(
+        () => setIdx((p) => (p + 1) % rawData.length),
+        speed,
+      );
+    }
+    return () => clearInterval(timerRef.current);
+  }, [playing, speed, rawData.length, dataSource]);
+  const activeData =
+    dataSource === "azure" && liveData.length > 0 ? liveData : rawData;
+  if (!activeData.length)
+    return (
+      <div
+        style={{
+          background: C.bg,
+          color: C.textMuted,
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontFamily: mono,
+          fontSize: 14,
+        }}
+      >
+        Loading telemetry data...
+      </div>
+    );
+  const ci =
+    dataSource === "azure" ? activeData.length - 1 : idx % activeData.length;
+  const current = activeData[ci] || {};
+  const history =
+    dataSource === "azure"
+      ? activeData
+      : activeData.slice(0, ci + 1).slice(-CHART_WINDOW);
+  const isLive = dataSource === "azure";
+  const tabs = [
+    { id: "hvac", label: "HVAC", icon: Wind },
+    { id: "pumps", label: "Pumps & Plant", icon: Droplets },
+    { id: "energy", label: "Electrical", icon: Zap },
+    { id: "compliance", label: "Compliance", icon: Shield },
+  ];
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        background: C.bg,
+        color: C.text,
+        fontFamily: sans,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          padding: "12px 24px",
+          borderBottom: `1px solid ${C.border}`,
+          background: C.surface,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <div
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 8,
+              background: `linear-gradient(135deg,${C.cyan}40,${C.purple}40)`,
+              border: `1px solid ${C.border}`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Activity size={15} color={C.cyan} />
+          </div>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: -0.3 }}>
+              Building 59 — Asset Performance Centre
+            </div>
+            <div style={{ fontSize: 11, color: C.textDim, fontFamily: mono }}>
+              BLDG59-LBNL-BERKELEY
+            </div>
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <button
+            onClick={() => {
+              setDataSource((p) => (p === "replay" ? "azure" : "replay"));
+              setLiveData([]);
+            }}
+            style={{
+              padding: "6px 14px",
+              borderRadius: 6,
+              fontSize: 12,
+              fontWeight: 700,
+              fontFamily: mono,
+              background: isLive ? `${C.green}18` : C.surfaceAlt,
+              border: `1px solid ${isLive ? C.green : C.border}`,
+              color: isLive ? C.green : C.textMuted,
+              cursor: "pointer",
+            }}
+          >
+            {isLive ? "LIVE — Azure Blob" : "REPLAY — Local Data"}
+          </button>
+          {!isLive && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "4px 10px",
+                background: C.surfaceAlt,
+                borderRadius: 6,
+                border: `1px solid ${C.border}`,
+              }}
+            >
+              <button
+                onClick={() => setPlaying(!playing)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  color: C.text,
+                  display: "flex",
+                  padding: 3,
+                }}
+              >
+                {playing ? <Pause size={13} /> : <Play size={13} />}
+              </button>
+              <button
+                onClick={() =>
+                  setIdx((p) => Math.min(p + 10, rawData.length - 1))
+                }
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  color: C.textMuted,
+                  display: "flex",
+                  padding: 3,
+                }}
+              >
+                <SkipForward size={13} />
+              </button>
+              <select
+                value={speed}
+                onChange={(e) => setSpeed(Number(e.target.value))}
+                style={{
+                  background: C.bg,
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 4,
+                  color: C.textMuted,
+                  fontSize: 11,
+                  fontFamily: mono,
+                  padding: "2px 6px",
+                }}
+              >
+                {SPEED_OPTIONS.map((s) => (
+                  <option key={s} value={s}>
+                    {s < 1000 ? "0.5s" : `${s / 1000}s`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "5px 14px",
+              background: C.surfaceAlt,
+              borderRadius: 6,
+              border: `1px solid ${C.border}`,
+            }}
+          >
+            <span
+              style={{
+                width: 7,
+                height: 7,
+                borderRadius: "50%",
+                background: isLive
+                  ? liveData.length > 0
+                    ? C.green
+                    : C.amber
+                  : C.textDim,
+                animation: isLive || playing ? "pulse 1.5s infinite" : "none",
+              }}
+            />
+            <span
+              style={{ fontSize: 12, fontFamily: mono, color: C.textMuted }}
+            >
+              {connStatus}
+            </span>
+          </div>
+          {!isLive && (
+            <div
+              style={{
+                fontSize: 12,
+                fontFamily: mono,
+                color: C.textMuted,
+                padding: "4px 10px",
+                background: C.surfaceAlt,
+                borderRadius: 6,
+              }}
+            >
+              {ci + 1} / {rawData.length}
+            </div>
+          )}
+        </div>
+      </div>
+      <div
+        style={{
+          display: "flex",
+          gap: 6,
+          padding: "10px 24px",
+          borderBottom: `1px solid ${C.border}`,
+        }}
+      >
+        {tabs.map((tab) => {
+          const Icon = tab.icon;
+          const active = sector === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setSector(tab.id)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 7,
+                padding: "8px 16px",
+                background: active ? `${C.cyan}12` : "transparent",
+                border: active
+                  ? `1px solid ${C.cyan}30`
+                  : "1px solid transparent",
+                borderRadius: 8,
+                color: active ? C.cyan : C.textDim,
+                fontSize: 14,
+                fontWeight: active ? 600 : 400,
+                cursor: "pointer",
+                fontFamily: sans,
+                transition: "all 0.15s",
+              }}
+            >
+              <Icon size={15} />
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+      <div style={{ padding: 24 }}>
+        {sector === "hvac" && <HVACView data={history} current={current} />}
+        {sector === "pumps" && <PumpsView data={history} current={current} />}
+        {sector === "energy" && <EnergyView data={history} current={current} />}
+        {sector === "compliance" && (
+          <ComplianceView data={history} current={current} />
+        )}
+      </div>
+      <div
+        style={{
+          padding: "10px 24px",
+          borderTop: `1px solid ${C.border}`,
+          display: "flex",
+          justifyContent: "space-between",
+        }}
+      >
+        <span style={{ fontSize: 11, color: C.textDim, fontFamily: mono }}>
+          Data: LBNL Building 59 Operational Dataset (Luo et al., 2022, Nature
+          Scientific Data) — Enriched with physics-informed synthetic
+          degradation
+        </span>
+        <span style={{ fontSize: 11, color: C.textDim, fontFamily: mono }}>
+          v2.1 — Dynamic Replay + Azure Live
+        </span>
+      </div>
+      <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}`}</style>
+    </div>
+  );
+}

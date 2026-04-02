@@ -1,5 +1,6 @@
 """
-SOLIS DIGITAL TWIN — EDGE SIMULATOR v2
+Created by Suryaprakasarao Vaddadi
+BLDG59 DIGITAL TWIN — EDGE SIMULATOR v2
 ========================================
 Streams enriched building telemetry to Azure IoT Hub.
 Reads bldg59_digital_twin_jan2020_enriched.csv and sends
@@ -281,7 +282,7 @@ def run_simulator():
     """Main loop: connect to Azure, stream telemetry."""
     
     print("=" * 60)
-    print("SOLIS DIGITAL TWIN — EDGE SIMULATOR v2")
+    print("BLDG59 DIGITAL TWIN — EDGE SIMULATOR v2")
     print("=" * 60)
     
     if not CONNECTION_STRING:
@@ -294,7 +295,7 @@ def run_simulator():
     try:
         df = pd.read_csv(CSV_FILE)
     except FileNotFoundError:
-        print(f"ERROR: {CSV_FILE} not found. Run enrich_solis_data.py first.")
+        print(f"ERROR: {CSV_FILE} not found. Run enrich_bldg59_data.py first.")
         sys.exit(1)
     
     print(f"  {len(df)} rows, {df.shape[1]} columns")
@@ -303,7 +304,7 @@ def run_simulator():
     # Connect to Azure
     print(f"\nConnecting to Azure IoT Hub...")
     try:
-        client = IoTHubDeviceClient.create_from_connection_string(CONNECTION_STRING)
+        client = IoTHubDeviceClient.create_from_connection_string(CONNECTION_STRING, websockets=True)
         client.connect()
         print("  Connected!")
     except Exception as e:

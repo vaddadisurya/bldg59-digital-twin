@@ -1,0 +1,15 @@
+# Dependency folders (generated during build)
+node_modules/
+dist/
+
+# Python artifacts
+__pycache__/
+*.pyc
+
+# Large datasets and archives
+*.zip
+Bldg59_clean data/
+
+# Git metadata
+.git
+.gitignore
