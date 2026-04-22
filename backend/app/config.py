@@ -7,7 +7,8 @@ _BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # LLM Configuration
 NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY", "")
-LLM_MODEL = "meta/llama-3.1-70b-instruct"
+# LLM_MODEL = "meta/llama-3.1-70b-instruct"
+LLM_MODEL = "meta/llama-3.1-8b-instruct"
 
 # Azure Blob Storage Configuration
 AZURE_CONN_STR = os.getenv("AZURE_STORAGE_CONNECTION_STRING", "")

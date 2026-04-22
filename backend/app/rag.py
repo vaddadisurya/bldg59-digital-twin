@@ -12,16 +12,24 @@ def init_chroma():
     client = chromadb.PersistentClient(path=CHROMA_PATH)
     _collection = client.get_or_create_collection(name="bldg59", embedding_function=ef)
     
-    # Simple indexing: If empty, read all .txt/.md files in RAG_DOCS_PATH
     if _collection.count() == 0:
         doc_id = 0
         for filename in os.listdir(RAG_DOCS_PATH):
             if filename.endswith((".md", ".txt")):
                 with open(os.path.join(RAG_DOCS_PATH, filename), "r", encoding="utf-8") as f:
                     content = f.read()
-                    # Storing whole document for simplicity; in production, chunk by headers
-                    _collection.add(documents=[content], ids=[f"doc_{doc_id}"])
+                
+                # Split by ## headers instead of storing whole file
+                chunks = content.split("\n## ")
+                for chunk in chunks:
+                    if len(chunk.strip()) < 50:
+                        continue
+                    _collection.add(
+                        documents=[chunk[:2000]],  # cap each chunk at 2000 chars
+                        ids=[f"doc_{doc_id}"]
+                    )
                     doc_id += 1
+        print(f"Indexed {doc_id} chunks")
 
 @tool
 def search_knowledge(query: str) -> str:

@@ -1,0 +1,17 @@
+fastapi
+uvicorn[standard]
+websockets
+langchain
+langchain-community
+langchain-openai
+langgraph
+chromadb
+sentence-transformers
+apscheduler
+pydantic
+httpx
+python-dotenv
+openai
+pandas
+numpy
+azure-storage-blob

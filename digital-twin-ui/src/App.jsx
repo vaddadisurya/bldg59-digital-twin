@@ -32,7 +32,19 @@ import {
   Play,
   Pause,
   SkipForward,
+  MessageSquare,
+  Bell,
+  X,
+  Send,
+  User,
+  Bot
 } from "lucide-react";
+
+// AI Layer Configuration
+//const API_BASE = "https://solid-invention-jjvj79w67q7x25g44-8000.app.github.dev";
+//const WS_BASE = "wss://solid-invention-jjvj79w67q7x25g44-8000.app.github.dev/chat";
+const API_BASE = "https://bldg59-backend.orangefield-8eca9cde.germanywestcentral.azurecontainerapps.io";
+const WS_URL = "wss://bldg59-backend.orangefield-8eca9cde.germanywestcentral.azurecontainerapps.io/chat";
 
 const n = (v, fb = 0) => {
   const x = Number(v);
@@ -945,6 +957,137 @@ export default function App() {
   const [liveData, setLiveData] = useState([]);
   const [connStatus, setConnStatus] = useState("Replay Mode");
   const timerRef = useRef(null);
+
+  // --- AI LAYER STATE ---
+  const [visitor, setVisitor] = useState(null);
+  const [vName, setVName] = useState("");
+  const [vEmail, setVEmail] = useState("");
+  
+  const [chatOpen, setChatOpen] = useState(false);
+  const [findingsOpen, setFindingsOpen] = useState(false);
+  
+  const [chatInput, setChatInput] = useState("");
+const [messages, setMessages] = useState([
+    { role: "assistant", content: `Building 59 AI Assistant\n\nAsk about sensors, equipment health, energy, compliance or predictions\nUse dashboard names: RTU-1, RTU-2, HWP-01, etc.\nWhat-if: "What happens if fan speed drops to 40%?"\nClick AI Overwatch toggle for autonomous monitoring\nAI returns latest Jan 2020 value, may differ from cycling dashboard\nQueries can take up to 30 seconds\nIf AI errors or hallucinates, rephrase or retry\n\nFeedback: jrsprvaddadi@hotmail.com` }
+]);
+  const [isTyping, setIsTyping] = useState(false);
+  const wsRef = useRef(null);
+  const chatEndRef = useRef(null);
+  
+  const [findings, setFindings] = useState([]);
+  // ----------------------
+
+  // --- NEW: AGENT CONTROL STATE ---
+  const [agentEnabled, setAgentEnabled] = useState(false);
+
+  // Fetch initial agent status on load
+  useEffect(() => {
+    if (!visitor) return;
+    fetch(`${API_BASE}/agent/status`)
+      .then(res => res.json())
+      .then(data => setAgentEnabled(data.enabled))
+      .catch(() => console.warn("Failed to fetch agent status"));
+  }, [visitor]);
+
+  // Toggle function
+const handleToggleAgent = async () => {
+    // 1. Update the UI immediately so the manager sees the change
+    const newState = !agentEnabled;
+    setAgentEnabled(newState); 
+
+    try {
+      // 2. Fire and forget the toggle to the backend
+      const res = await fetch(`${API_BASE}/agent/toggle`, { method: "POST" });
+      const data = await res.json();
+      
+      // 3. Sync with reality just in case
+      setAgentEnabled(data.enabled);
+    } catch (err) {
+      console.error("Failed to toggle agent", err);
+      setAgentEnabled(!newState); // Revert only if it actually fails
+    }
+  };
+  // --------------------------------
+
+  // --- AI LAYER EFFECTS ---
+  // 1. Check local storage for visitor on load
+  useEffect(() => {
+    const stored = localStorage.getItem("bldg59_visitor");
+    if (stored) setVisitor(JSON.parse(stored));
+  }, []);
+
+const handleVisitorSubmit = async (e) => {
+    e.preventDefault();
+    if(!vName || !vEmail) return;
+    
+    const v = { name: vName, email: vEmail };
+    
+    // 1. Log the user into the UI immediately so they aren't blocked
+    localStorage.setItem("bldg59_visitor", JSON.stringify(v));
+    setVisitor(v);
+
+    // 2. Try to send the log to the backend in the background
+    try {
+      await fetch(`${API_BASE}/visitor`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(v)
+      });
+    } catch(err) { 
+      console.warn("Backend not reachable yet, but continuing to dashboard...", err); 
+    }
+  };
+
+  // 2. Connect WebSocket when Chat Opens
+  useEffect(() => {
+    if (!visitor || !chatOpen) return;
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      wsRef.current = new WebSocket(WS_BASE);
+      wsRef.current.onmessage = (event) => {
+        setIsTyping(false);
+        setMessages(prev => [...prev, { role: "assistant", content: event.data }]);
+      };
+    }
+    return () => {
+      // Optional: close connection on unmount to save resources
+      // wsRef.current?.close(); 
+    };
+  }, [visitor, chatOpen]);
+
+  // 3. Scroll to bottom of chat
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, chatOpen, isTyping]);
+
+  const sendChatMessage = (e) => {
+    e.preventDefault();
+    if (!chatInput.trim() || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    setMessages(prev => [...prev, { role: "user", content: chatInput }]);
+    wsRef.current.send(chatInput);
+    setChatInput("");
+    setIsTyping(true);
+  };
+
+  // 4. Poll Findings Feed
+  useEffect(() => {
+    if (!visitor) return;
+    const fetchFindings = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/findings?limit=20`);
+        if (res.ok) {
+          const data = await res.json();
+          // Reverse to show newest at the top
+          setFindings(data.reverse()); 
+        }
+      } catch(e) { console.warn("Findings fetch failed"); }
+    };
+    
+    fetchFindings();
+    const iv = setInterval(fetchFindings, 30000); // Poll every 30s
+    return () => clearInterval(iv);
+  }, [visitor]);
+  // -------------------------
+
   useEffect(() => {
     fetch("telemetry_full.json")
       .then((r) => r.json())
@@ -954,6 +1097,7 @@ export default function App() {
       })
       .catch(() => console.warn("telemetry_full.json not found"));
   }, []);
+  
   useEffect(() => {
     if (dataSource !== "azure") {
       setConnStatus("Replay Mode");
@@ -987,6 +1131,7 @@ export default function App() {
     const iv = setInterval(poll, BLOB_CONFIG.pollIntervalMs);
     return () => clearInterval(iv);
   }, [dataSource]);
+  
   useEffect(() => {
     if (playing && dataSource === "replay" && rawData.length > 0) {
       timerRef.current = setInterval(
@@ -996,8 +1141,34 @@ export default function App() {
     }
     return () => clearInterval(timerRef.current);
   }, [playing, speed, rawData.length, dataSource]);
+  
   const activeData =
     dataSource === "azure" && liveData.length > 0 ? liveData : rawData;
+
+  // Render Visitor Screen if not logged in
+  if (!visitor) {
+    return (
+      <div style={{ background: C.bg, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: sans }}>
+        <div style={{ background: C.surface, padding: 40, borderRadius: 12, border: `1px solid ${C.border}`, width: 400, maxWidth: "90%" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
+            <Activity size={24} color={C.cyan} />
+            <h2 style={{ color: C.text, margin: 0, fontSize: 20 }}>Bldg 59 Auth</h2>
+          </div>
+          <p style={{ color: C.textMuted, fontSize: 14, marginBottom: 24 }}>Please register to access the Building 59 Operational Digital Twin and AI Command Center.</p>
+          <form onSubmit={handleVisitorSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <input type="text" placeholder="Name" value={vName} onChange={e => setVName(e.target.value)} required
+              style={{ padding: "12px 16px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontFamily: sans }} />
+            <input type="email" placeholder="Email" value={vEmail} onChange={e => setVEmail(e.target.value)} required
+              style={{ padding: "12px 16px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontFamily: sans }} />
+            <button type="submit" style={{ padding: "12px", background: C.cyan, color: C.bg, border: "none", borderRadius: 8, fontWeight: 600, cursor: "pointer", marginTop: 8 }}>
+              Enter Dashboard
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   if (!activeData.length)
     return (
       <div
@@ -1015,6 +1186,7 @@ export default function App() {
         Loading telemetry data...
       </div>
     );
+    
   const ci =
     dataSource === "azure" ? activeData.length - 1 : idx % activeData.length;
   const current = activeData[ci] || {};
@@ -1029,6 +1201,9 @@ export default function App() {
     { id: "energy", label: "Electrical", icon: Zap },
     { id: "compliance", label: "Compliance", icon: Shield },
   ];
+
+  const unreadCritical = findings.filter(f => f.severity === 'critical').length;
+
   return (
     <div
       style={{
@@ -1036,6 +1211,7 @@ export default function App() {
         background: C.bg,
         color: C.text,
         fontFamily: sans,
+        position: "relative" // Added for absolute positioning of overlays
       }}
     >
       <div
@@ -1073,6 +1249,37 @@ export default function App() {
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+{/* Visitor Display */}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, paddingRight: 12, borderRight: `1px solid ${C.border}` }}>
+            <User size={14} color={C.textDim} />
+            <span style={{ fontSize: 12, color: C.textMuted, fontFamily: mono }}>{visitor.name}</span>
+          </div>
+
+          {/* --- SOPHISTICATED AGENT TOGGLE BUTTON --- */}
+          <button
+            onClick={handleToggleAgent}
+            style={{
+              display: "flex", alignItems: "center", gap: 8,
+              padding: "6px 16px", borderRadius: 6,
+              fontSize: 11, fontWeight: 700, fontFamily: mono, letterSpacing: 0.5,
+              background: agentEnabled ? `${C.cyan}15` : C.surfaceAlt,
+              border: `1px solid ${agentEnabled ? `${C.cyan}60` : C.border}`,
+              color: agentEnabled ? C.cyan : C.textMuted,
+              cursor: "pointer", transition: "all 0.3s ease",
+              boxShadow: agentEnabled ? `0 0 12px ${C.cyan}25` : "none"
+            }}
+          >
+            <Bot 
+              size={14} 
+              style={{ 
+                animation: agentEnabled ? "pulse 2s infinite" : "none",
+                opacity: agentEnabled ? 1 : 0.6
+              }} 
+            />
+            {agentEnabled ? "AI OVERWATCH: ENGAGED" : "AI OVERWATCH: STANDBY"}
+          </button>
+          {/* ----------------------------------------- */}
+
           <button
             onClick={() => {
               setDataSource((p) => (p === "replay" ? "azure" : "replay"));
@@ -1238,7 +1445,7 @@ export default function App() {
           );
         })}
       </div>
-      <div style={{ padding: 24 }}>
+      <div style={{ padding: 24, paddingBottom: 100 }}>
         {sector === "hvac" && <HVACView data={history} current={current} />}
         {sector === "pumps" && <PumpsView data={history} current={current} />}
         {sector === "energy" && <EnergyView data={history} current={current} />}
@@ -1246,6 +1453,100 @@ export default function App() {
           <ComplianceView data={history} current={current} />
         )}
       </div>
+
+      {/* --- AI LAYER UI: FLOATING CHAT PANEL --- */}
+      {chatOpen && (
+        <div style={{
+          position: "fixed", bottom: 90, right: 24, width: 380, height: 500,
+          background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12,
+          display: "flex", flexDirection: "column", boxShadow: "0 10px 30px rgba(0,0,0,0.5)", zIndex: 50
+        }}>
+          <div style={{ padding: "14px 16px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", background: C.surfaceAlt, borderRadius: "12px 12px 0 0" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Activity size={16} color={C.cyan} />
+              <span style={{ fontWeight: 600, fontSize: 14 }}>AI Assistant</span>
+            </div>
+            <button onClick={() => setChatOpen(false)} style={{ background: "none", border: "none", color: C.textDim, cursor: "pointer" }}><X size={16} /></button>
+          </div>
+          <div style={{ flex: 1, padding: 16, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
+            {messages.map((m, i) => (
+              <div key={i} style={{ alignSelf: m.role === "user" ? "flex-end" : "flex-start", maxWidth: "85%" }}>
+                <div style={{ fontSize: 11, color: C.textDim, marginBottom: 4, fontFamily: mono, textAlign: m.role === "user" ? "right" : "left" }}>
+                  {m.role === "user" ? visitor.name : "System"}
+                </div>
+                <div style={{
+                  padding: "10px 14px", borderRadius: 8, fontSize: 13, lineHeight: 1.5,
+                  background: m.role === "user" ? `${C.cyan}20` : C.surfaceAlt,
+                  color: m.role === "user" ? C.cyan : C.text,
+                  border: `1px solid ${m.role === "user" ? `${C.cyan}40` : C.border}`
+                }}>
+                  <span style={{ whiteSpace: "pre-line" }}>{m.content}</span>
+                </div>
+              </div>
+            ))}
+            {isTyping && (
+              <div style={{ alignSelf: "flex-start", fontSize: 12, color: C.textMuted, fontStyle: "italic", padding: "4px 8px" }}>
+                AI is analyzing...
+              </div>
+            )}
+            <div ref={chatEndRef} />
+          </div>
+          <form onSubmit={sendChatMessage} style={{ padding: 12, borderTop: `1px solid ${C.border}`, display: "flex", gap: 8 }}>
+            <input type="text" value={chatInput} onChange={e => setChatInput(e.target.value)} placeholder="Ask about building data..."
+              style={{ flex: 1, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6, padding: "8px 12px", color: C.text, outline: "none", fontSize: 13 }} />
+            <button type="submit" disabled={isTyping} style={{ background: C.cyan, color: C.bg, border: "none", borderRadius: 6, padding: "0 12px", cursor: isTyping ? "not-allowed" : "pointer", opacity: isTyping ? 0.5 : 1 }}>
+              <Send size={16} />
+            </button>
+          </form>
+        </div>
+      )}
+
+      {/* --- AI LAYER UI: FINDINGS PANEL --- */}
+      {findingsOpen && (
+        <div style={{
+          position: "fixed", bottom: 90, right: 80, width: 340, maxHeight: 400,
+          background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12,
+          display: "flex", flexDirection: "column", boxShadow: "0 10px 30px rgba(0,0,0,0.5)", zIndex: 49
+        }}>
+          <div style={{ padding: "14px 16px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", background: C.surfaceAlt, borderRadius: "12px 12px 0 0" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Bell size={16} color={C.amber} />
+              <span style={{ fontWeight: 600, fontSize: 14 }}>Autonomous Findings</span>
+            </div>
+            <button onClick={() => setFindingsOpen(false)} style={{ background: "none", border: "none", color: C.textDim, cursor: "pointer" }}><X size={16} /></button>
+          </div>
+          <div style={{ flex: 1, overflowY: "auto", padding: 12 }}>
+            {findings.length === 0 ? (
+              <div style={{ color: C.textDim, fontSize: 13, textAlign: "center", padding: 20 }}>No findings recorded yet.</div>
+            ) : (
+              findings.map((f, i) => (
+                <div key={i} style={{ marginBottom: 10, padding: 12, background: C.bg, borderRadius: 8, borderLeft: `3px solid ${f.severity === 'critical' ? C.red : f.severity === 'warning' ? C.amber : C.cyan}` }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: f.severity === 'critical' ? C.red : f.severity === 'warning' ? C.amber : C.cyan, textTransform: "uppercase" }}>{f.severity}</span>
+                    <span style={{ fontSize: 10, color: C.textDim, fontFamily: mono }}>{new Date(f.timestamp).toLocaleTimeString()}</span>
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{f.summary}</div>
+                  <div style={{ fontSize: 12, color: C.textMuted, lineHeight: 1.4 }}>{f.detail}</div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* --- AI LAYER UI: FLOATING ACTION BUTTONS --- */}
+      <div style={{ position: "fixed", bottom: 24, right: 24, display: "flex", gap: 12, zIndex: 50 }}>
+        <button onClick={() => { setFindingsOpen(!findingsOpen); setChatOpen(false); }} 
+          style={{ width: 48, height: 48, borderRadius: 24, background: C.surfaceAlt, border: `1px solid ${C.border}`, color: C.text, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
+          <Bell size={20} />
+          {unreadCritical > 0 && <span style={{ position: "absolute", top: 0, right: 0, background: C.red, color: C.text, fontSize: 10, fontWeight: 700, width: 18, height: 18, borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center" }}>{unreadCritical}</span>}
+        </button>
+        <button onClick={() => { setChatOpen(!chatOpen); setFindingsOpen(false); }} 
+          style={{ width: 48, height: 48, borderRadius: 24, background: C.cyan, border: "none", color: C.bg, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 4px 12px ${C.cyan}40` }}>
+          <MessageSquare size={20} fill="currentColor" />
+        </button>
+      </div>
+
       <div
         style={{
           padding: "10px 24px",
