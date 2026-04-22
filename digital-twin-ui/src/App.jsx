@@ -44,7 +44,7 @@ import {
 //const API_BASE = "https://solid-invention-jjvj79w67q7x25g44-8000.app.github.dev";
 //const WS_BASE = "wss://solid-invention-jjvj79w67q7x25g44-8000.app.github.dev/chat";
 const API_BASE = "https://bldg59-backend.orangefield-8eca9cde.germanywestcentral.azurecontainerapps.io";
-const WS_URL = "wss://bldg59-backend.orangefield-8eca9cde.germanywestcentral.azurecontainerapps.io/chat";
+const WS_BASE = "wss://bldg59-backend.orangefield-8eca9cde.germanywestcentral.azurecontainerapps.io/chat";
 
 const n = (v, fb = 0) => {
   const x = Number(v);
