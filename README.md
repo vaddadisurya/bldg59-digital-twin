@@ -1,167 +1,218 @@
-# Building 59 Digital Twin — Predictive Maintenance Platform
+# Building 59 — Agentic AI Powered IoT Digital Twin for Building Operations
 
-A full stack IoT Digital Twin proof of concept for commercial building asset monitoring, predictive maintenance, and facilities management analytics. Built using real sensor data from the Lawrence Berkeley National Laboratory Building 59 dataset, with an Azure cloud backend and a React dashboard.
+An end-to-end IoT Digital Twin for Lawrence Berkeley National Laboratory's Building 59, featuring a cloud-native data pipeline, interactive React dashboard, and an AI-powered conversational interface with autonomous monitoring capabilities.
 
-Live Dashboard: `https://vaddadisurya.github.io/bldg59-digital-twin/`
+**[Live Dashboard](https://vaddadisurya.github.io/bldg59-digital-twin/)** · **[Dataset Paper (Luo et al., 2022)](https://doi.org/10.1038/s41597-022-01257-x)**
 
-## What This Project Does
+---
 
-This platform transforms raw building sensor telemetry into actionable maintenance intelligence. It monitors four critical operational domains of a commercial office building: HVAC air handling systems, pumps and hot water plant, electrical distribution and lighting, and regulatory compliance. The system detects equipment degradation before failure, tracks energy waste, monitors legionella risk in hot water systems, and calculates real time OEE, MTBF, MTTR, and Remaining Useful Life for each asset.
+## Overview
 
-The dashboard has two modes. In replay mode, it steps through a month of historical building data with playback controls, showing how metrics evolve over time. In live mode, it connects directly to Azure Blob Storage and displays processed telemetry from the cloud pipeline in near real time.
+This project demonstrates a complete Digital Twin system that ingests 300+ sensor data points from 4 HVAC rooftop units, a hot water pump system, and electrical distribution panels. The data flows through a cloud-native Azure pipeline, is enriched with physics-based synthetic degradation models, and is presented via an interactive dashboard with an AI agent that can answer natural language queries, predict equipment failures, simulate what-if scenarios, and autonomously monitor building health.
+
+Built as a portfolio demonstrator for the SMART Buildings R&D Engineer KTP Associate role (GCU01907) at Glasgow Caledonian University in partnership with Solis Trading Ltd.
 
 ## Architecture
 
 ```
-Enriched CSV ──▶ Python Edge Simulator (Docker/ACI)
-                        │
-                        ▼
-                 Azure IoT Hub (F1)
-                        │
-                        ▼
-              Azure Stream Analytics
-              (15-min tumbling windows)
-                        │
-                ┌───────┼───────┐───────┐
-                ▼       ▼       ▼       ▼
-            Blob:    Blob:    Blob:    Blob:
-            HVAC     Pumps    Elec     Compliance
-                        │
-                        ▼
-              React Dashboard (GitHub Pages)
-              ├── Replay Mode (local JSON)
-              └── Live Mode (Azure Blob fetch)
+┌──────────────────────────────────────────────────────────────────┐
+│                    React Dashboard (GitHub Pages)                 │
+│  4 Views · AI Chat Panel · Findings Feed · Overwatch Toggle      │
+│  Replay Mode (local JSON) · Live Mode (Azure Blob)               │
+└──────────────┬────────────────────┬──────────────────────────────┘
+               │ WebSocket /chat    │ REST /findings, /visitor
+               ▼                    ▼
+┌──────────────────────────────────────────────────────────────────┐
+│              FastAPI Backend (Azure Container Apps)               │
+│                                                                  │
+│  ┌─────────────┐  ┌──────────────┐  ┌────────────────────────┐  │
+│  │  LangGraph   │  │  APScheduler │  │   Azure Blob Storage   │  │
+│  │  ReAct Agent │  │  (5 min)     │  │   - agent-findings     │  │
+│  │             │  │              │  │   - visitor-log         │  │
+│  └──────┬──────┘  └──────┬───────┘  │   - rag-documents      │  │
+│         │                │          └────────────────────────┘  │
+│         ▼                ▼                                      │
+│  ┌─────────────────────────────┐  ┌──────────────────────────┐  │
+│  │     LangChain Tools         │  │     ChromaDB (RAG)       │  │
+│  │  - query_sensor_data        │  │  - sentence-transformers │  │
+│  │  - get_trend_analysis       │  │  - all-MiniLM-L6-v2     │  │
+│  │  - get_energy_rates         │  │  - 15 knowledge chunks   │  │
+│  │  - search_knowledge         │  └──────────────────────────┘  │
+│  └──────────┬──────────────────┘                                │
+│             ▼                                                    │
+│  ┌─────────────────────────────┐  ┌──────────────────────────┐  │
+│  │   Pandas DataFrame          │  │   NVIDIA NIM (LLM)       │  │
+│  │   2,976 rows × 178 cols     │  │   Llama 3.1 70B/8B       │  │
+│  │   In-memory sensor queries  │  │   OpenAI-compatible API   │  │
+│  └─────────────────────────────┘  └──────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────┘
+               ▲
+               │ MQTT (when live pipeline active)
+┌──────────────┴───────────────────────────────────────────────────┐
+│                IoT Pipeline (start for live demos)               │
+│  ACI Simulator → IoT Hub (F1) → Stream Analytics → Blob Storage │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
-### Azure Services Used
+## Features
 
-| Service | Purpose |
-|---------|---------|
-| IoT Hub (F1 Free) | Secure MQTT ingestion from edge simulator |
-| Stream Analytics | Real time SQL aggregation with 15 minute tumbling windows |
-| Blob Storage | Sector specific JSON containers for processed telemetry |
-| Container Registry | Docker image hosting for the simulator |
-| Container Instances | Serverless execution of the simulator in Azure cloud |
+### Dashboard
+- **HVAC View** — Per-RTU dropdown showing efficiency, delta-T, airflow, fan speed, OEE, and speed volatility with threshold indicators
+- **Pumps & Plant View** — Bearing vibration run-to-failure curve, power consumption trending, RUL prediction, pump OEE, MTBF/MTTR, legionella compliance monitoring
+- **Electrical View** — North/south wing energy breakdown, HVAC percentage analysis, ghost lighting detection with cost estimation
+- **Compliance View** — HSG274 hot water compliance, ISO 10816 vibration classification, CIBSE zone comfort monitoring
+- **Replay Mode** — Cycles through full January 2020 dataset with play/pause/speed controls
+- **Live Mode** — Fetches real-time data from Azure Blob Storage (when IoT pipeline is active)
 
-## The Dataset
+### AI Assistant (Chat)
+- Natural language queries about building sensor data, equipment health, energy consumption, and compliance
+- Tool-calling agent using LangGraph ReAct pattern with 4 LangChain tools
+- What-if simulation: "What happens if RTU-001 fan speed drops to 40%?"
+- Predictive analytics: "When will the pump reach critical vibration?"
+- Cost analysis: "What is the daily energy bill?"
+- RAG-powered knowledge retrieval from building documentation
+- Conversation history maintained per session
 
-This project uses the Berkeley Building 59 three year operational dataset published by Luo et al. (2022) in Nature Scientific Data. The building is a 10,400 m² steel framed office building at Lawrence Berkeley National Laboratory in Berkeley, California, constructed in 2015. The dataset contains over 300 sensors and meters across two office floors, including whole building and end use energy consumption, HVAC system operating conditions, indoor and outdoor environmental parameters, and occupant counts.
+### Autonomous Monitoring (AI Overwatch)
+- Background agent runs every 5 minutes when activated
+- Checks pump vibration against ISO 10816 thresholds
+- Monitors hot water temperature for HSG274 legionella compliance
+- Analyses degradation trends and predicts time-to-failure
+- Generates structured findings with severity classification (critical/warning/info)
+- Findings persisted to Azure Blob Storage and displayed in dashboard notification feed
 
-Paper: Luo, N., Wang, Z., Blum, D. et al. "A three-year dataset supporting research on building energy management and occupancy analytics." Scientific Data 9, 156 (2022). https://doi.org/10.1038/s41597-022-01257-x
+## Tech Stack
 
-Dataset: https://datadryad.org/dataset/doi:10.7941/D1N33Q
+| Layer | Technology |
+|-------|-----------|
+| Frontend | React, Recharts, WebSocket, GitHub Pages |
+| Backend | FastAPI, LangGraph, LangChain, APScheduler, Pydantic |
+| AI/ML | NVIDIA NIM (Llama 3.1), ChromaDB, sentence-transformers (all-MiniLM-L6-v2) |
+| Data | Pandas, NumPy, scikit-learn (KNN imputation) |
+| Cloud | Azure IoT Hub, Stream Analytics, Blob Storage, Container Apps, Container Registry, Container Instance |
+| DevOps | Docker, Git, GitHub Codespaces |
+| Standards | ISO 10816, HSG274 Part 2, CIBSE Guide A, Brick Ontology |
 
-The building's HVAC system consists of four rooftop air handling units (RTU 001 through RTU 004) serving north and south wing zones across two office floors. Each RTU supplies conditioned air through an underfloor air distribution system with 50 fan powered terminal units providing zone level reheat. The asset topology is formally described using the Brick schema, an open standard for semantic representation of building systems, which is included in this repository as a TTL file.
+## Dataset
 
-## Data Pipeline
+Berkeley Building 59 Operational Dataset (Luo et al., 2022, Nature Scientific Data).
 
-### Stage 1: Raw Data Extraction (build_bldg59_data.py)
+- **Source**: Lawrence Berkeley National Laboratory, Berkeley, California
+- **Building**: 10,400 sqm commercial office, 4 RTUs, 50+ zones
+- **Period**: January 2020, 15-minute intervals
+- **Raw**: 2,976 rows × 75 columns
+- **Enriched**: 2,976 rows × 178 columns after physics-informed synthetic augmentation
 
-Merges 27 raw CSV files from the dataset covering energy meters, RTU airflow and fan speeds, zone temperatures, heating and cooling setpoints, zone fan speeds, hot water temperatures, chilled water temperatures, and outdoor weather conditions. Filters to January 2020 (a high heating load winter month), resamples all data streams to uniform 15 minute intervals, removes physically impossible outlier values, applies linear interpolation for short sensor dropouts (up to 30 minutes), and uses K Nearest Neighbours imputation (K=5) from scikit learn for larger data gaps.
+### Data Enrichment
 
-### Stage 2: Physics Informed Enrichment (enrich_bldg59_data.py)
+The raw dataset was enriched with physics-based synthetic data to demonstrate Digital Twin capabilities:
 
-Adds derived columns that the raw dataset does not contain but that are essential for facilities management analytics:
+- **Pump degradation**: Linear vibration increase from 2.5 to 8.0 mm/s with correlated power increase from 8.0 to 12.5 kW
+- **Legionella events**: Hot water temperature drops below 60°C on January 15-17
+- **RTU efficiency**: Calculated from airflow/fan speed ratio per RTU
+- **OEE**: Overall Equipment Effectiveness for HVAC and pump systems
+- **Comfort gaps**: Zone-level temperature deviation from setpoints
+- **Ghost lighting**: Binary detection of overnight lighting waste
+- **RUL/MTBF/MTTR**: Predictive maintenance metrics derived from vibration trends
 
-RTU supply and return air temperatures are synthesised using physics based correlations with fan speed and outdoor temperature. Zone actual temperatures are generated from setpoints with outdoor coupling, thermal lag, and daily oscillation patterns. Hot water supply temperature is modelled with a deliberate legionella risk event injected on January 15 to 17, where the boiler underperforms and water temperature drops below the 60 degree Celsius threshold defined in HSG274. Pump power consumption and bearing vibration follow linear degradation curves from healthy baselines (8 kW and 2.5 mm/s) toward failure thresholds (11 kW and 8.0 mm/s per ISO 10816).
-
-Derived metrics computed include RTU efficiency index (airflow per unit fan speed), supply return air temperature differential (the primary HVAC health indicator), zone comfort gap (actual temperature minus setpoint), total building energy with HVAC percentage breakdown, ghost lighting detection using time of day proxy, and fan speed volatility for short cycling detection.
-
-The output is an enriched CSV with 177 columns and 2,976 rows covering the full month at 15 minute resolution.
-
-### Stage 3: Edge Simulation (digital_twin_simulator.py)
-
-A Python script that reads the enriched CSV and streams it as four sector specific JSON payloads (HVAC, Pumps, Electrical, Compliance) through Azure IoT Hub at configurable intervals. Each payload includes computed OEE, MTBF, MTTR, and status flags. The simulator is containerised with Docker and deployed to Azure Container Registry, running as an Azure Container Instance for continuous cloud based operation without dependency on a local machine.
-
-### Stage 4: Cloud Processing (Azure Stream Analytics)
-
-Four SQL queries with 15 minute tumbling windows aggregate and route telemetry into sector specific blob storage containers. The HVAC query extracts efficiency, fan speeds, airflow, delta T, comfort gap, volatility, outdoor conditions, and OEE. The Pumps query extracts vibration, power, hot water temperature, RUL, legionella status, and maintenance metrics. The Electrical query extracts total load, HVAC breakdown by wing, lighting, and ghost lighting alerts. The Compliance query extracts hot water temperature and overall compliance check results.
-
-## Dashboard
-
-The React dashboard is hosted on GitHub Pages and built with Vite, Recharts, and Lucide icons. It provides four operational views:
-
-**HVAC and Air Handling** includes a dropdown selector for RTU 001 through RTU 004, each mapped to their respective zone groups from the Brick ontology. Metrics displayed include OEE, efficiency index, supply return delta T, fan speed, comfort gap, volatility, outdoor temperature, MTBF, and MTTR. Time series charts show efficiency trending and delta T with zone comfort gap overlay.
-
-**Pumps and Plant** tracks the primary hot water pump with bearing vibration run to failure curve against ISO 10816 warning (4.5 mm/s) and failure (8.0 mm/s) thresholds, power consumption trending against baseline, predicted Remaining Useful Life, legionella compliance status against HSG274, and degradation percentage.
-
-**Electrical** shows total building load, HVAC percentage share, north vs south wing breakdown, lighting consumption, ghost lighting alerts with estimated waste, and panel level OEE.
-
-**Compliance** aggregates four regulatory checks: hot water above 60 degrees Celsius per HSG274, zone comfort within plus or minus 2 degrees Fahrenheit per CIBSE guidelines, equipment vibration within ISO 10816 limits, and ghost lighting status. Each check shows pass or breach with current values, and the hot water temperature chart highlights the legionella risk zone.
-
-The dashboard toggles between replay mode (stepping through local JSON with play, pause, and speed controls) and live Azure mode (polling blob storage containers every 30 seconds for real time data).
-
-## How to Run
-
-### Prerequisites
-
-Python 3.10 or higher, Node.js 18 or higher, Docker, and an Azure account (free tier sufficient for IoT Hub).
-
-### Data Pipeline
+## Project Structure
 
 ```
-pip install pandas numpy scikit-learn
-python build_bldg59_data.py
-python enrich_bldg59_data.py
+bldg59-digital-twin/
+├── backend/                          # FastAPI AI Backend
+│   ├── app/
+│   │   ├── agent.py                  # LangGraph ReAct agent, system prompt
+│   │   ├── main.py                   # FastAPI server, WebSocket, REST, scheduler
+│   │   ├── tools.py                  # LangChain @tool functions (Pandas queries)
+│   │   ├── rag.py                    # ChromaDB initialization, search_knowledge
+│   │   ├── blob_storage.py           # Azure Blob read/write for persistence
+│   │   └── config.py                 # Environment variables, thresholds, rates
+│   ├── data/
+│   │   ├── bldg59_digital_twin_jan2020_enriched.csv
+│   │   └── DATA_REFERENCE_GUIDE.md   # RAG knowledge document
+│   ├── Dockerfile
+│   └── requirements.txt
+├── digital-twin-ui/                  # React Dashboard
+│   ├── src/App.jsx                   # Main dashboard with all views + AI panels
+│   └── public/telemetry_full.json    # Replay mode data
+├── digital_twin_simulator.py         # IoT edge simulator (MQTT to IoT Hub)
+├── enrich_bldg59_data.py             # Physics-based data enrichment script
+├── build_bldg59_data.py              # Base dataset builder
+└── Bldg59_w_occ Brick model.ttl      # Brick ontology schema
 ```
 
-### Simulator (Local)
+## API Endpoints
 
-```
-pip install pandas azure-iot-device python-dotenv
-echo "AZURE_CONNECTION_STRING=your-connection-string" > .env
-python digital_twin_simulator.py
-```
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/chat` | WebSocket | Bidirectional chat with LangGraph agent |
+| `/findings` | GET | Retrieve autonomous agent findings |
+| `/visitor` | POST | Log visitor name and email |
+| `/agent/toggle` | POST | Start/stop autonomous monitoring |
+| `/agent/status` | GET | Check if autonomous agent is running |
+| `/docs` | GET | Swagger UI API documentation |
 
-### Simulator (Docker)
+## Azure Resources
 
-```
-docker build -t bldg59-simulator:v1 .
-docker run --env-file .env bldg59-simulator:v1
-```
+| Service | Name | Purpose |
+|---------|------|---------|
+| IoT Hub | iot-bldg59-twin-poc (F1 free) | MQTT device ingestion |
+| Stream Analytics | asa-digitaltwin-poc | Real-time 15-min tumbling window processing |
+| Blob Storage | stbldg59poc | Telemetry, findings, visitor logs, RAG documents |
+| Container Registry | acrbldg59 | Docker image storage |
+| Container Instance | bldg59-sim-aci | IoT simulator deployment |
+| Container Apps | bldg59-backend | AI backend (scale-to-zero) |
 
-### Dashboard (Development)
+## Quick Start
 
-```
-cd digital-twin-ui
-npm install
-echo "VITE_AZURE_HVAC_SAS=your-blob-url" > .env
-npm run dev
-```
+### View the Dashboard
+Visit [https://vaddadisurya.github.io/bldg59-digital-twin/](https://vaddadisurya.github.io/bldg59-digital-twin/) — replay mode works immediately with no setup.
 
-### Dashboard (Production Build)
-
-```
-cd digital-twin-ui
-npm run build
-```
-
-## Repository Structure
-
-```
-├── digital-twin-ui/              React dashboard (Vite)
-│   ├── src/App.jsx               Main dashboard component
-│   ├── public/telemetry_full.json  Precomputed replay data
-│   └── package.json
-├── digital_twin_simulator.py     Edge simulator
-├── build_bldg59_data.py          Raw data pipeline
-├── enrich_bldg59_data.py         Physics informed enrichment
-├── bldg59_digital_twin_jan2020_enriched.csv  Enriched dataset
-├── Dockerfile                    Simulator container
-├── .dockerignore
-├── .gitignore
-└── README.md
+### Run Backend Locally
+```bash
+cd backend
+pip install -r requirements.txt
+echo "NVIDIA_API_KEY=your-key" > .env
+PYTHONPATH=. uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-## Technologies
+### Run with Docker
+```bash
+cd backend
+docker build -t bldg59-backend .
+docker run -p 8000:8000 -e NVIDIA_API_KEY=your-key bldg59-backend
+```
 
-Python, Pandas, scikit-learn (KNN Imputer), React, Vite, Recharts, Lucide, Azure IoT Hub, Azure Stream Analytics, Azure Blob Storage, Azure Container Registry, Azure Container Instances, Docker, MQTT, Brick Schema (TTL/RDF)
+## Known Limitations
 
-## Dataset Citation
+- NVIDIA NIM 8B model occasionally fails on multi-tool-call queries (500 "Failed to apply prompt template"). The 70B model or Groq is recommended for production.
+- AI chatbot returns the latest CSV row value, which may differ from the dashboard that cycles through the full month.
+- Pump degradation data is synthetically generated (linear). Real-world degradation is non-linear and requires ML models trained on actual failure events.
+- The autonomous agent may hit NVIDIA NIM rate limits (40 req/min free tier) when used concurrently with the chatbot.
 
-Hong, T., Luo, N., Blum, D., Wang, Z. (2022). A three-year building operational performance dataset for informing energy efficiency. Dryad. https://doi.org/10.7941/D1N33Q
+## Future Work
+
+- Interactive what-if simulator with sliders for parameter adjustment
+- ML model integration (Random Forest for RUL, XGBoost for energy forecasting)
+- Groq or self-hosted LLM for faster inference
+- Email alerting for critical findings
+- Multi-building support with parameterised data ingestion
+- Live BMS integration replacing CSV replay
+
+## References
+
+1. Luo, N. et al. (2022). "Three years of hourly data from 3,000+ sensors deployed in 4 office buildings." *Nature Scientific Data*, 9:156. [https://doi.org/10.1038/s41597-022-01257-x](https://doi.org/10.1038/s41597-022-01257-x)
+2. Balaji, B. et al. (2018). "Brick: Metadata schema for portable smart building applications." *Applied Energy*, 226, 1273-1292.
+3. ISO 10816-1:1995. "Mechanical vibration — Evaluation of machine vibration by measurements on non-rotating parts."
+4. HSG274 Part 2. "The control of legionella bacteria in hot and cold water systems." UK Health and Safety Executive.
+5. CIBSE Guide A. "Environmental design." Chartered Institution of Building Services Engineers.
 
 ## Author
 
-Suryaprakasarao Vaddadi
-MSc Internet of Things (Distinction), Bournemouth University
+**Surya Vaddadi**
+MSc Internet of Things (Distinction) — Bournemouth University
+[jrsprvaddadi@hotmail.com](mailto:jrsprvaddadi@hotmail.com)
+
+## License
+
+This project is for academic and portfolio purposes. The Building 59 dataset is publicly available under Creative Commons Attribution 4.0 (CC BY 4.0).
